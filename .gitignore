@@ -218,3 +218,4 @@ __marimo__/
 .streamlit/secrets.toml
 
 .serena
+.headroom_wrap_marker.json
