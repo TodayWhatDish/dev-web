@@ -2,21 +2,6 @@
 backend features/: "도메인 단위" 기능. recommand, auth, admin처럼 API 리소스/도메인 하나가 폴더 하나 
 frontend features/ (FSD): "사용자 행동 단위" 기능. auth-signup-form처럼 "폼 제출 하나", "버튼 클릭 하나"처럼 훨씬 잘게 쪼갠 것
 
-## backend/app/
-
-- **main.py** : FastAPI 앱 생성 + 각 feature router 등록. 앱 조립 지점
-- **core/** : 2개 이상 feature가 공유하는 것만 두는 폴더
-  - **config.py** : 환경변수·공용 상수 (URL, Key 등)
-  - **db.py** : 서버 DB..?
-  - **security.py** : JWT 검증 등 인증 공용 로직
-  [ JWT : 로그인 성공 시 서버가 발급하는 토큰 ,사용자 정보(id, 만료시간 등)를 담은 문자열 ]
-- **features/** : 기능별 폴더 (API). 각 폴더는 router(HTTP) / service(로직) / schema(데이터 스키마)
-  - **recommand/** : 반려동물 프로필 기반 사료·간식 추천 API
-  - **auth/** : 회원가입, 로그인에 필요한 API
-  - **admin/** : 관리자 대시보드용 집계·조회 API
-
-
-
 ## frontend/src/
 
 - **app/** : Next.js 라우팅 전용 (페이지 조립만, 로직 없음)
