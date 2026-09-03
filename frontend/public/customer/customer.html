@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오늘뭐멍냥 — 디자인 샘플</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<!-- Pretendard는 구글 폰트에 없는 서체라 family=Pretendard 로 걸면 조용히 로드가 안 된다.
+     실제 배포하는 곳(jsdelivr, orioncactus/pretendard)에서 받는다. -->
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+  /* 색·서체·둥글기 값은 사용자가 준 재구조화안(todaywhatdish_redesign.html)을 그대로 옮겼다.
+     실 데이터 연결 전이라 반려동물 2마리 · 구매 이력 · 상품 3장은 전부 customer.js 안 목업이다.
+     상품 썸네일은 이미지 대신 이모지 하나만 쓴다 - 실사진은 톤이 바뀔 때마다 다시 골라야 해서 번거롭다. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cream: #FAF6EE;
+    --sand: #EDE3D3;
+    --ink: #22302A;
+    --ink-soft: #4C5C54;
+    --teal: #2F6E62;
+    --teal-deep: #1E4A42;
+    --coral: #E8935B;
+    --coral-soft: #FBE4D0;
+    --yellow: #F5C56B;
+    --line: #DDD3BF;
+  }
+
+  body {
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  .page { max-width: 1180px; margin: 0 auto; padding: 28px 32px 80px; }
+
+  /* ===== 헤더 ===== */
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+
+  .logo { display: flex; align-items: center; gap: 8px; font-family: 'Gowun Batang', serif; font-size: 22px; font-weight: 700; color: var(--ink); }
+  .logo-mark { width: 34px; height: 34px; border-radius: 10px; background: var(--teal); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+
+  .auth-buttons { display: flex; align-items: center; gap: 14px; }
+  /* 관리자페이지 링크는 기능 버튼이 아니라 내부용 이동 경로라 조용한 텍스트 링크로 - 회원가입만큼 강조하면 고객이 누른다 */
+  .admin-link { font-size: 12.5px; color: var(--ink-soft); text-decoration: none; padding-bottom: 2px; border-bottom: 1px dashed var(--line); }
+  .admin-link:hover { color: var(--ink); border-bottom-color: var(--ink-soft); }
+
+  .btn { font-family: 'Pretendard', -apple-system, sans-serif; font-weight: 600; font-size: 14px; padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
+  .btn-solid { background: var(--teal-deep); color: white; }
+
+  /* ===== 프로필 스트립: 좌측 우리 아이/구매 이력 알약 목록 + 우측 탭 스위치 ===== */
+  .profile-strip { display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; margin-bottom: 14px; gap: 16px; }
+
+  .pill-scroll { display: flex; align-items: center; gap: 10px; overflow-x: auto; flex: 1; }
+  .empty-msg { font-size: 13.5px; color: var(--ink-soft); white-space: nowrap; }
+
+  .pet-pill { display: flex; align-items: center; gap: 8px; background: var(--cream); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px 6px 6px; white-space: nowrap; font-size: 14px; font-weight: 500; }
+  .pet-pill .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--coral-soft); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+
+  .purchase-pill { display: flex; align-items: center; gap: 10px; background: var(--cream); border: 1px solid var(--line); border-radius: 999px; padding: 7px 8px 7px 16px; white-space: nowrap; font-size: 13.5px; font-weight: 500; }
+  .purchase-pill .p-review-btn { border: none; background: var(--teal-deep); color: #fff; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .purchase-pill .p-done { font-size: 12px; color: var(--ink-soft); padding: 0 8px; }
+
+  .pill-add { border: 1.5px dashed var(--line); background: transparent; color: var(--ink-soft); border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+
+  .tab-switch { display: flex; background: var(--cream); border-radius: 999px; padding: 4px; flex-shrink: 0; }
+  .tab-switch button { border: none; background: transparent; padding: 8px 16px; border-radius: 999px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+  .tab-switch button.active { background: white; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  /* 탭에서 "리뷰 남기기"를 누르면 여기 인라인으로 펼쳐진다 */
+  .review-panel { display: flex; gap: 10px; background: white; border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; margin-bottom: 36px; }
+  .review-panel[hidden] { display: none; }
+  .review-panel textarea { flex: 1; height: 56px; resize: none; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-family: inherit; font-size: 13.5px; }
+  .review-panel button { border: none; background: var(--teal-deep); color: #fff; border-radius: 10px; padding: 0 18px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+
+  /* ===== 히어로 ===== */
+  .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-top: 36px; }
+
+  .hero-copy .eyebrow { font-size: 13.5px; font-weight: 600; color: var(--teal); margin-bottom: 14px; }
+  .hero-copy h1 { font-family: 'Gowun Batang', serif; font-size: 44px; line-height: 1.35; font-weight: 700; color: var(--ink); margin-bottom: 20px; }
+  .hero-copy h1 .hl { color: var(--coral); }
+  .hero-copy p { font-size: 15.5px; color: var(--ink-soft); max-width: 42ch; margin-bottom: 28px; }
+  .hero-actions { display: flex; align-items: center; gap: 22px; }
+  .btn-cta { background: var(--teal-deep); color: white; font-weight: 700; font-size: 15px; padding: 15px 26px; border-radius: 12px; border: none; cursor: pointer; }
+  .link-quiet { font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 4px; cursor: pointer; background: none; border: none; }
+
+  /* ===== 히어로 카드 ===== */
+  .hero-card { position: relative; background: var(--sand); border-radius: 24px; padding: 36px 32px 28px; }
+  .trust-badge { position: absolute; top: -18px; right: 22px; width: 84px; height: 84px; background: var(--yellow); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 6px 16px rgba(0,0,0,0.12); }
+  .trust-badge .pct { font-size: 19px; font-weight: 700; color: var(--ink); }
+  .trust-badge .txt { font-size: 9px; color: var(--ink); line-height: 1.2; margin-top: 2px; }
+
+  .pet-icons { display: flex; justify-content: center; gap: 28px; margin: 8px 0 24px; }
+  .pet-icons span { font-size: 54px; }
+
+  /* 로그인한 사용자만 쓰는 AI 질문창. 하루 질문 횟수를 다 쓰면 멤버십 안내로 바뀐다 */
+  .ai-box { background: white; border-radius: 16px; padding: 18px 20px; border: 1px solid var(--line); }
+  .ai-box-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .ai-label { font-size: 13px; font-weight: 700; color: var(--coral); }
+  .ai-quota { font-size: 12px; color: var(--ink-soft); background: var(--cream); padding: 4px 10px; border-radius: 999px; }
+  .ai-input-row { display: flex; gap: 8px; }
+  .ai-input-row input { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-family: inherit; font-size: 13.5px; color: var(--ink); }
+  .ai-input-row input:disabled { color: var(--ink-soft); background: var(--cream); }
+  .ai-input-row button { background: var(--teal-deep); color: white; border: none; border-radius: 10px; padding: 0 18px; font-weight: 600; font-size: 13.5px; cursor: pointer; }
+  .ai-input-row button:disabled { background: var(--line); cursor: not-allowed; }
+  .ai-note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; }
+  .ai-note.upsell a { color: var(--teal-deep); font-weight: 700; }
+
+  /* ===== 추천 섹션 ===== */
+  .section-title { display: flex; align-items: baseline; justify-content: space-between; margin: 56px 0 22px; }
+  .section-title h2 { font-family: 'Gowun Batang', serif; font-size: 24px; font-weight: 700; }
+  .section-title span { font-size: 13px; color: var(--ink-soft); }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .card { background: white; border: 1px solid var(--line); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .card-thumb { height: 120px; border-radius: 14px; background: var(--sand); display: flex; align-items: center; justify-content: center; font-size: 44px; }
+  .card .brand { font-size: 11.5px; color: var(--coral); font-weight: 700; letter-spacing: .03em; }
+  .card .name { font-size: 15.5px; font-weight: 700; }
+  .card .review { font-size: 13px; color: var(--ink-soft); line-height: 1.6; flex: 1; }
+  .card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+  .card .price { font-size: 15px; font-weight: 800; color: var(--teal-deep); }
+  .badge-score { font-size: 11.5px; font-weight: 700; color: var(--teal-deep); background: var(--cream); padding: 4px 10px; border-radius: 999px; }
+  .btn-buy { margin-top: 2px; width: 100%; padding: 12px; border-radius: 12px; border: none; background: var(--teal-deep); color: #fff; font-weight: 700; font-size: 13.5px; cursor: pointer; }
+  .btn-buy.bought { background: var(--sand); color: var(--ink-soft); cursor: default; }
+
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; }
+    .profile-strip { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">🐾</div>
+      오늘뭐멍냥
+    </div>
+    <div class="auth-buttons">
+      <a class="admin-link" href="../admin/admin.html">관리자페이지</a>
+      <button type="button" class="btn btn-ghost" id="loginBtn">로그인</button>
+      <button type="button" class="btn btn-solid" id="signupBtn">회원가입</button>
+    </div>
+  </header>
+
+  <div class="profile-strip">
+    <div class="pill-scroll" id="pillScroll"></div>
+    <div class="tab-switch" id="tabSwitch">
+      <button type="button" class="active" data-tab="pets">우리 아이</button>
+      <button type="button" data-tab="purchases">구매 이력</button>
+    </div>
+  </div>
+
+  <div class="review-panel" id="reviewPanel" hidden></div>
+
+  <div class="hero">
+    <div class="hero-copy">
+      <div class="eyebrow">TODAY'S PICK · 2026</div>
+      <h1>우리 아이 오늘 한 끼,<br>근거 있는 <span class="hl">후기</span>로 골라요.</h1>
+      <p>실제로 산 사람들의 후기에서 찾은 근거만 보여드려요. 축종·체구·알레르기까지 우리 아이 프로필에 맞춰 걸러낸 사료와 간식이에요.</p>
+      <div class="hero-actions">
+        <button type="button" class="btn-cta">오늘의 추천 보러가기 →</button>
+        <button type="button" class="link-quiet">어떻게 고르나요?</button>
+      </div>
+    </div>
+
+    <div class="hero-card">
+      <div class="trust-badge">
+        <div class="pct">92%</div>
+        <div class="txt">이 후기가<br>도움됐어요</div>
+      </div>
+
+      <div class="pet-icons">
+        <span>🐶</span>
+        <span>🐱</span>
+      </div>
+
+      <div class="ai-box">
+        <div class="ai-box-top">
+          <span class="ai-label">AI 추천 질문</span>
+          <span class="ai-quota" id="aiQuota">오늘 5/5 질문 가능</span>
+        </div>
+        <form class="ai-input-row" id="askForm">
+          <input type="text" id="askInput" placeholder="예) 알레르기 없는 소형견 사료 추천해줘" disabled>
+          <button type="submit" id="askBtn" disabled>질문</button>
+        </form>
+        <div class="ai-note" id="aiNote">로그인 후 이용할 수 있어요.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    <h2>오늘의 추천</h2>
+    <span>우리 아이 프로필 기준 · 실제 후기 근거</span>
+  </div>
+  <div class="cards">
+    <div class="card">
+      <div class="card-thumb">🍖</div>
+      <div class="brand">그레인프리 키친</div>
+      <div class="name">연어 &amp; 고구마 건식 사료</div>
+      <div class="review">"소형견인데도 알갱이가 작아서 잘 먹어요. 냄새도 안 나고 변 상태도 좋아졌어요."</div>
+      <div class="card-foot">
+        <span class="price">32,900원</span>
+        <span class="badge-score">유사도 0.91</span>
+      </div>
+      <button type="button" class="btn-buy" data-price="32900">구매하기</button>
+    </div>
+    <div class="card">
+      <div class="card-thumb">🐟</div>
+      <div class="brand">퓨어펫</div>
+      <div class="name">화식 트릿 (닭가슴살)</div>
+      <div class="review">"산책 훈련용으로 딱이에요. 크기도 작고 손에 안 묻어서 편해요."</div>
+      <div class="card-foot">
+        <span class="price">9,900원</span>
+        <span class="badge-score">유사도 0.88</span>
+      </div>
+      <button type="button" class="btn-buy" data-price="9900">구매하기</button>
+    </div>
+    <div class="card">
+      <div class="card-thumb">🥕</div>
+      <div class="brand">냥이부엌</div>
+      <div class="name">수제 동결건조 큐브</div>
+      <div class="review">"알레르기 있는 고양이인데 반응 하나도 없었어요. 향도 좋아하네요."</div>
+      <div class="card-foot">
+        <span class="price">14,500원</span>
+        <span class="badge-score">유사도 0.85</span>
+      </div>
+      <button type="button" class="btn-buy" data-price="14500">구매하기</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="customer.js"></script>
+</body>
+</html>
