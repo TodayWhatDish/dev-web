@@ -24,6 +24,16 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "🛑 포트 3000 죽이기",
+            "detail": "정적 서버가 창을 닫아도 안 죽고 남아 포트를 잡고 있을 때 쓴다.",
+            "type": "shell",
+            "command": "lsof -ti:3000 | xargs kill -9",
+            "problemMatcher": [],
+            "presentation": {
+                "clear": true
+            }
         }
     ]
 }
