@@ -90,8 +90,16 @@
   .btn-cta { background: var(--teal-deep); color: white; font-weight: 700; font-size: 15px; padding: 15px 26px; border-radius: 12px; border: none; cursor: pointer; }
   .link-quiet { font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 4px; cursor: pointer; background: none; border: none; }
 
-  /* ===== 히어로 카드 ===== */
-  .hero-card { position: relative; background: var(--sand); border-radius: 24px; padding: 36px 32px 28px; }
+  /* ===== 히어로 카드 =====
+     배경 사진은 Unsplash에서 가져온다 (customer.js, GET /background - 백엔드가 키를 들고 프록시).
+     실패하면 fetch 전과 똑같이 --sand 단색 배경으로 남는다 - 별도 폴백 이미지가 필요 없다. */
+  .hero-card { position: relative; background: var(--sand); background-size: cover; background-position: center; border-radius: 24px; padding: 36px 32px 28px; overflow: hidden; }
+  /* 사진 위에 얹는 흰 ai-box/노란 badge는 그대로 읽히지만, 이모지 두 개는 사진 위에 바로 얹혀서 살짝 어둡게 깔아준다 */
+  .hero-card::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(34,48,42,.1), rgba(34,48,42,.5)); }
+  .hero-card > * { position: relative; }
+  .photo-credit { position: absolute; left: 16px; bottom: 10px; font-size: 10.5px; color: rgba(255,255,255,.85); }
+  .photo-credit[hidden] { display: none; }
+  .photo-credit a { color: inherit; }
   .trust-badge { position: absolute; top: -18px; right: 22px; width: 84px; height: 84px; background: var(--yellow); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 6px 16px rgba(0,0,0,0.12); }
   .trust-badge .pct { font-size: 19px; font-weight: 700; color: var(--ink); }
   .trust-badge .txt { font-size: 9px; color: var(--ink); line-height: 1.2; margin-top: 2px; }
@@ -99,8 +107,10 @@
   .pet-icons { display: flex; justify-content: center; gap: 28px; margin: 8px 0 24px; }
   .pet-icons span { font-size: 54px; }
 
-  /* 로그인한 사용자만 쓰는 AI 질문창. 하루 질문 횟수를 다 쓰면 멤버십 안내로 바뀐다 */
-  .ai-box { background: white; border-radius: 16px; padding: 18px 20px; border: 1px solid var(--line); }
+  /* 로그인한 사용자만 쓰는 AI 질문창. 하루 질문 횟수를 다 쓰면 멤버십 안내로 바뀐다.
+     불투명 흰색이면 카드 대부분을 덮어서 배경 사진이 질문창 뒤에 파묻혀 버린다 -
+     반투명 유리 느낌으로 바꿔서 사진이 은은하게 비치게 한다. */
+  .ai-box { background: rgba(255,255,255,.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 16px; padding: 18px 20px; border: 1px solid var(--line); }
   .ai-box-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .ai-label { font-size: 13px; font-weight: 700; color: var(--coral); }
   .ai-quota { font-size: 12px; color: var(--ink-soft); background: var(--cream); padding: 4px 10px; border-radius: 999px; }
@@ -111,6 +121,10 @@
   .ai-input-row button:disabled { background: var(--line); cursor: not-allowed; }
   .ai-note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; }
   .ai-note.upsell a { color: var(--teal-deep); font-weight: 700; }
+  .ai-answer { margin-top: 12px; font-size: 13.5px; color: var(--ink); line-height: 1.65; white-space: pre-wrap; }
+  .ai-answer[hidden] { display: none; }
+  .ai-sources { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .ai-source-item { font-size: 12px; color: var(--ink-soft); background: var(--cream); border-radius: 8px; padding: 8px 10px; }
 
   /* ===== 회원가입 모달 ===== */
   .modal-overlay { position: fixed; inset: 0; background: rgba(34,48,42,0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
@@ -188,10 +202,7 @@
         <div class="txt">이 후기가<br>도움됐어요</div>
       </div>
 
-      <div class="pet-icons">
-        <span>🐶</span>
-        <span>🐱</span>
-      </div>
+      <div class="photo-credit" id="photoCredit" hidden></div>
 
       <div class="ai-box">
         <div class="ai-box-top">
@@ -203,6 +214,8 @@
           <button type="submit" id="askBtn" disabled>질문</button>
         </form>
         <div class="ai-note" id="aiNote">로그인 후 이용할 수 있어요.</div>
+        <div class="ai-answer" id="askAnswer" hidden></div>
+        <div class="ai-sources" id="askSources"></div>
       </div>
     </div>
   </div>
@@ -247,6 +260,21 @@
     </div>
   </div>
 
+</div>
+
+<div class="modal-overlay" id="loginOverlay" hidden>
+  <div class="modal-box">
+    <h3>로그인</h3>
+    <form id="loginForm">
+      <input type="email" id="liEmail" placeholder="이메일" required>
+      <input type="password" id="liPassword" placeholder="비밀번호" required>
+      <div class="modal-error" id="loginError"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="loginCancel">취소</button>
+        <button type="submit" class="btn btn-solid">로그인</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <div class="modal-overlay" id="signupOverlay" hidden>
