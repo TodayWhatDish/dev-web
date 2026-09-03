@@ -1,0 +1,29 @@
+{
+    // dev-data-embed(백엔드, 8000)가 이미 떠 있어야 admin.js의 fetch가 성공한다.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🌐 프론트 정적 서버 (3000)",
+            "detail": "frontend/public을 3000번 포트로 서빙한다. Next.js 초기화 전까지 임시로 이걸 쓴다.",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "-m",
+                "http.server",
+                "3000"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/frontend/public"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "panel": "dedicated",
+                "clear": true
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
