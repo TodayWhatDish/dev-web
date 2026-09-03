@@ -112,6 +112,17 @@
   .ai-note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; }
   .ai-note.upsell a { color: var(--teal-deep); font-weight: 700; }
 
+  /* ===== 회원가입 모달 ===== */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(34,48,42,0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .modal-overlay[hidden] { display: none; }
+  .modal-box { background: white; border-radius: 20px; padding: 28px 26px; width: 100%; max-width: 380px; max-height: 86vh; overflow-y: auto; }
+  .modal-box h3 { font-family: 'Gowun Batang', serif; font-size: 20px; margin-bottom: 18px; }
+  .modal-box form { display: flex; flex-direction: column; gap: 10px; }
+  .modal-box input, .modal-box select { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 13.5px; color: var(--ink); }
+  .modal-box hr { border: none; border-top: 1px dashed var(--line); margin: 6px 0; }
+  .modal-error { font-size: 12.5px; color: #C0392B; min-height: 1em; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+
   /* ===== 추천 섹션 ===== */
   .section-title { display: flex; align-items: baseline; justify-content: space-between; margin: 56px 0 22px; }
   .section-title h2 { font-family: 'Gowun Batang', serif; font-size: 24px; font-weight: 700; }
@@ -236,6 +247,33 @@
     </div>
   </div>
 
+</div>
+
+<div class="modal-overlay" id="signupOverlay" hidden>
+  <div class="modal-box">
+    <h3>회원가입</h3>
+    <form id="signupForm">
+      <input type="email" id="suEmail" placeholder="이메일" required>
+      <input type="password" id="suPassword" placeholder="비밀번호" required>
+      <input type="text" id="suName" placeholder="이름" required>
+      <input type="tel" id="suPhone" placeholder="연락처 (선택)">
+      <input type="text" id="suRegion" placeholder="지역 (선택)">
+      <hr>
+      <input type="text" id="suPetName" placeholder="반려견 이름" required>
+      <select id="suPetGender">
+        <option value="">반려견 성별 (선택)</option>
+        <option value="M">수컷</option>
+        <option value="F">암컷</option>
+      </select>
+      <input type="date" id="suPetBirth">
+      <input type="number" id="suPetWeight" placeholder="체중(kg, 선택)" step="0.1" min="0">
+      <div class="modal-error" id="signupError"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="signupCancel">취소</button>
+        <button type="submit" class="btn btn-solid">가입하기</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script src="customer.js"></script>

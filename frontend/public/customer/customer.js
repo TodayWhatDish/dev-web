@@ -1,8 +1,12 @@
-// 오늘뭐멍냥 고객페이지 - 디자인 샘플. 전부 목업이다.
+// 오늘뭐멍냥 고객페이지 - 회원가입만 실제 백엔드(POST /signup)에 붙였고, 나머지는 여전히 목업이다.
 // 실제로 붙일 때는 각 자리에 남긴 주석의 엔드포인트로 갈아끼운다.
 const $ = (sel) => document.querySelector(sel);
 
+// admin.js와 같은 자리 - 프론트(3000)와 백엔드(8000)가 다른 오리진이라 직접 적는다.
+const API = "http://localhost:8000";
+
 let isLoggedIn = false;
+let userToken = localStorage.getItem("userToken") || "";
 let activeTab = 'pets';
 // 실제로는 로그인한 고객의 pet 목록 (GET /api/customers/{id}).
 // 재구조화안 그대로 보리/나비 두 마리를 기본값으로 채워둔다 - "없을 때" 문구는 아래서 같이 처리한다.
@@ -13,14 +17,85 @@ let pets = [
 let purchases = []; // 실제로는 같은 응답의 purchases. 추천 카드에서 "구매하기"를 눌러야 채워진다
 let quota = { used: 0, max: 5 };
 
-// ---------------- 로그인/회원가입 (목업 토글) ----------------
+// ---------------- 로그인/회원가입 ----------------
 const loginBtn = $('#loginBtn');
 const signupBtn = $('#signupBtn');
-loginBtn.addEventListener('click', () => {
-  isLoggedIn = !isLoggedIn;
+const signupOverlay = $('#signupOverlay');
+const signupForm = $('#signupForm');
+const signupError = $('#signupError');
+
+function setLoggedIn(loggedIn){
+  isLoggedIn = loggedIn;
   loginBtn.textContent = isLoggedIn ? '로그아웃' : '로그인';
   signupBtn.hidden = isLoggedIn;
   renderAskGate();
+}
+
+loginBtn.addEventListener('click', () => {
+  // ponytail: 기존 회원 로그인(POST /login)은 아직 목업이다 - 토글만 한다. 붙일 때 admin.js의
+  // loginBtn 핸들러(fetch -> access_token -> localStorage)와 같은 모양으로 갈아끼우면 된다.
+  if (isLoggedIn){
+    userToken = '';
+    localStorage.removeItem('userToken');
+  }
+  setLoggedIn(!isLoggedIn);
+});
+
+signupBtn.addEventListener('click', () => {
+  signupError.textContent = '';
+  signupForm.reset();
+  signupOverlay.hidden = false;
+});
+$('#signupCancel').addEventListener('click', () => { signupOverlay.hidden = true; });
+
+signupForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  signupError.textContent = '';
+
+  const body = {
+    email: $('#suEmail').value,
+    password: $('#suPassword').value,
+    name: $('#suName').value,
+    phone: $('#suPhone').value || null,
+    region: $('#suRegion').value || null,
+    pet_name: $('#suPetName').value,
+    pet_gender: $('#suPetGender').value || null,
+    pet_birth_date: $('#suPetBirth').value || null,
+    pet_weight_kg: $('#suPetWeight').value ? Number($('#suPetWeight').value) : null,
+  };
+
+  const submitBtn = signupForm.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  let res;
+  try {
+    res = await fetch(`${API}/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    signupError.textContent = '서버에 연결할 수 없습니다.';
+    submitBtn.disabled = false;
+    return;
+  }
+  submitBtn.disabled = false;
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    // 409(이메일 중복) / 422(형식 오류) 둘 다 서버가 detail을 준다 (app/api/routes/auth.py)
+    signupError.textContent = err.detail || '회원가입에 실패했습니다.';
+    return;
+  }
+
+  const { access_token } = await res.json();
+  userToken = access_token;
+  localStorage.setItem('userToken', userToken);
+  signupOverlay.hidden = true;
+
+  // 방금 만든 강아지 펫을 화면에 바로 반영 - 실제로는 로그인 시 GET /api/customers/{id}로 이 자리가 대체된다
+  pets = [{ name: body.pet_name, species: '강아지', emoji: '🐶' }];
+  renderPillScroll();
+  setLoggedIn(true);
 });
 
 // ---------------- 프로필 스트립: 우리 아이 / 구매 이력 탭 ----------------
