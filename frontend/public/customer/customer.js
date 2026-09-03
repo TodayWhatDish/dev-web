@@ -81,10 +81,27 @@ loginForm.addEventListener('submit', async (e) => {
   loadMyPets();
 });
 
+const suAllergiesEl = $('#suPetAllergies');
+let allergensLoaded = false;
+
+// 알레르겐 목록은 GET /allergens에서 딱 한 번만 받아온다 - 회원가입 모달 열 때마다 다시 안 부른다
+async function loadAllergenOptions(){
+  if (allergensLoaded) return;
+  try {
+    const res = await fetch(`${API}/allergens`);
+    if (!res.ok) return;
+    const names = await res.json();
+    suAllergiesEl.innerHTML = names.map((name) => `
+      <label><input type="checkbox" value="${name}">${name}</label>`).join('');
+    allergensLoaded = true;
+  } catch { /* 목록을 못 받아도 나머지 가입 절차는 그대로 진행한다 */ }
+}
+
 signupBtn.addEventListener('click', () => {
   signupError.textContent = '';
   signupForm.reset();
   signupOverlay.hidden = false;
+  loadAllergenOptions();
 });
 $('#signupCancel').addEventListener('click', () => { signupOverlay.hidden = true; });
 
@@ -102,6 +119,8 @@ signupForm.addEventListener('submit', async (e) => {
     pet_gender: $('#suPetGender').value || null,
     pet_birth_date: $('#suPetBirth').value || null,
     pet_weight_kg: $('#suPetWeight').value ? Number($('#suPetWeight').value) : null,
+    pet_size: $('#suPetSize').value ? Number($('#suPetSize').value) : null,
+    pet_allergies: [...suAllergiesEl.querySelectorAll('input:checked')].map((el) => el.value),
   };
 
   const submitBtn = signupForm.querySelector('button[type=submit]');
@@ -297,26 +316,28 @@ askForm.addEventListener('submit', async (e) => {
   }
 });
 
-// ---------------- 히어로 배경: Unsplash (백엔드가 GET /background로 키를 대신 들고 프록시) ----------------
+// ---------------- 페이지 배경: Unsplash (백엔드가 GET /background로 키를 대신 들고 프록시) ----------------
+// 카드 하나가 아니라 body 전체에 고정 배경으로 깐다. --cream 스크림을 이미지 위에 겹쳐서
+// 기존 크림 배경 위 글자 대비는 그대로 두고 사진은 은은하게만 비치게 한다.
 // 새로고침마다 부르면 무료 티어 요청 제한(시간당 50회)에 금방 걸리니 세션당 한 번만 부르고 캐싱한다.
-(async function loadHeroBackground(){
-  const heroCard = document.querySelector('.hero-card');
+(async function loadPageBackground(){
   const creditEl = $('#photoCredit');
 
   function applyBg({ url, credit_name, credit_link }){
-    heroCard.style.backgroundImage = `url(${url})`;
+    document.body.style.backgroundImage =
+      `linear-gradient(rgba(250,246,238,.85), rgba(250,246,238,.85)), url(${url})`;
     creditEl.innerHTML = `Photo by <a href="${credit_link}?utm_source=today-mung-nyang&utm_medium=referral" target="_blank" rel="noopener">${credit_name}</a> on <a href="https://unsplash.com/?utm_source=today-mung-nyang&utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>`;
     creditEl.hidden = false;
   }
 
-  const cached = sessionStorage.getItem('heroBg');
+  const cached = sessionStorage.getItem('pageBg');
   if (cached){ applyBg(JSON.parse(cached)); return; }
 
   try {
     const res = await fetch(`${API}/background?query=dog,cat`);
-    if (!res.ok) return; // 실패하면 CSS의 --sand 단색 배경 그대로 둔다
+    if (!res.ok) return; // 실패하면 CSS의 --cream 단색 배경 그대로 둔다
     const data = await res.json();
-    sessionStorage.setItem('heroBg', JSON.stringify(data));
+    sessionStorage.setItem('pageBg', JSON.stringify(data));
     applyBg(data);
   } catch { /* 서버 연결 안 돼도 배경색 폴백이 있으니 조용히 넘어간다 */ }
 })();
