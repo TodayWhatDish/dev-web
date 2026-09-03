@@ -139,6 +139,12 @@
   .modal-error { font-size: 12.5px; color: #C0392B; min-height: 1em; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
 
+  /* 설문 질문 하나(질문 문구 + 입력) 단위 - 반려동물 설문 항목은 이 안에 들어간다 */
+  .qa-block { display: flex; flex-direction: column; gap: 5px; }
+  .qa-block > .qa-label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+  .qa-block .radio-row { display: flex; gap: 14px; font-size: 13.5px; }
+  .qa-block .radio-row label { display: flex; align-items: center; gap: 5px; font-weight: 400; color: var(--ink); }
+
   /* ===== 추천 섹션 ===== */
   .section-title { display: flex; align-items: baseline; justify-content: space-between; margin: 56px 0 22px; }
   .section-title h2 { font-family: 'Gowun Batang', serif; font-size: 24px; font-weight: 700; }
@@ -153,6 +159,7 @@
   .card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
   .card .price { font-size: 15px; font-weight: 800; color: var(--teal-deep); }
   .badge-score { font-size: 11.5px; font-weight: 700; color: var(--teal-deep); background: var(--cream); padding: 4px 10px; border-radius: 999px; }
+  .badge-type { font-size: 11.5px; font-weight: 700; color: #fff; background: var(--coral); padding: 4px 10px; border-radius: 999px; }
   .btn-buy { margin-top: 2px; width: 100%; padding: 12px; border-radius: 12px; border: none; background: var(--teal-deep); color: #fff; font-weight: 700; font-size: 13.5px; cursor: pointer; }
   .btn-buy.bought { background: var(--sand); color: var(--ink-soft); cursor: default; }
 
@@ -287,23 +294,72 @@
       <input type="tel" id="suPhone" placeholder="연락처 (선택)">
       <input type="text" id="suRegion" placeholder="지역 (선택)">
       <hr>
-      <input type="text" id="suPetName" placeholder="반려견 이름" required>
-      <select id="suPetGender">
-        <option value="">반려견 성별 (선택)</option>
-        <option value="M">수컷</option>
-        <option value="F">암컷</option>
-      </select>
-      <input type="date" id="suPetBirth">
-      <input type="number" id="suPetWeight" placeholder="체중(kg, 선택)" step="0.1" min="0">
-      <select id="suPetSize">
-        <option value="">체구 (선택)</option>
-        <option value="1">초소형</option>
-        <option value="2">소형</option>
-        <option value="3">중형</option>
-        <option value="4">대형</option>
-        <option value="5">초대형</option>
-      </select>
-      <div id="suPetAllergies" class="allergy-list"></div>
+      <input type="text" id="suPetName" placeholder="반려동물 이름" required>
+
+      <div class="qa-block">
+        <span class="qa-label">강아지인가요, 고양이인가요?</span>
+        <div class="radio-row">
+          <label><input type="radio" name="suPetSpecies" value="개" checked> 강아지</label>
+          <label><input type="radio" name="suPetSpecies" value="고양이"> 고양이</label>
+        </div>
+      </div>
+
+      <div class="qa-block">
+        <span class="qa-label">성별이 어떻게 되나요? (선택)</span>
+        <select id="suPetGender">
+          <option value="">선택 안 함</option>
+          <option value="M">수컷</option>
+          <option value="F">암컷</option>
+        </select>
+      </div>
+
+      <div class="qa-block">
+        <span class="qa-label">태어난 날짜는 언제인가요? (선택)</span>
+        <input type="date" id="suPetBirth">
+      </div>
+
+      <div class="qa-block">
+        <span class="qa-label">체중은 몇 kg인가요? (선택)</span>
+        <input type="number" id="suPetWeight" placeholder="예: 4.5" step="0.1" min="0">
+      </div>
+
+      <div class="qa-block">
+        <span class="qa-label">체구는 어느 정도인가요? (선택)</span>
+        <select id="suPetSize">
+          <option value="">선택 안 함</option>
+          <option value="1">초소형</option>
+          <option value="2">소형</option>
+          <option value="3">중형</option>
+          <option value="4">대형</option>
+          <option value="5">초대형</option>
+        </select>
+      </div>
+
+      <div class="qa-block">
+        <span class="qa-label">평소 활동량은 어느 정도인가요? (선택)</span>
+        <select id="suPetActivity">
+          <option value="">선택 안 함</option>
+          <option value="1">적음</option>
+          <option value="2">보통</option>
+          <option value="3">많음</option>
+        </select>
+      </div>
+
+      <div class="qa-block">
+        <span class="qa-label">먹는 걸 밝히거나 입이 까다로운 편인가요? (선택)</span>
+        <input type="text" id="suDietNote" placeholder="예: 식탐이 많아요 / 입이 까다로워요">
+      </div>
+
+      <div class="qa-block">
+        <span class="qa-label">피부 상태는 어떤가요? (선택)</span>
+        <input type="text" id="suSkinNote" placeholder="예: 피부가 예민한 편이에요">
+      </div>
+
+      <div class="qa-block">
+        <span class="qa-label">알러지가 있나요? 있는 항목을 모두 체크해주세요 (선택)</span>
+        <div id="suPetAllergies" class="allergy-list"></div>
+      </div>
+
       <div class="modal-error" id="signupError"></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="signupCancel">취소</button>

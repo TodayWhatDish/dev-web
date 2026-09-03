@@ -116,11 +116,15 @@ signupForm.addEventListener('submit', async (e) => {
     phone: $('#suPhone').value || null,
     region: $('#suRegion').value || null,
     pet_name: $('#suPetName').value,
+    pet_species: document.querySelector('input[name="suPetSpecies"]:checked')?.value || null,
     pet_gender: $('#suPetGender').value || null,
     pet_birth_date: $('#suPetBirth').value || null,
     pet_weight_kg: $('#suPetWeight').value ? Number($('#suPetWeight').value) : null,
     pet_size: $('#suPetSize').value ? Number($('#suPetSize').value) : null,
     pet_allergies: [...suAllergiesEl.querySelectorAll('input:checked')].map((el) => el.value),
+    pet_activity_level: $('#suPetActivity').value ? Number($('#suPetActivity').value) : null,
+    diet_note: $('#suDietNote').value || null,
+    skin_note: $('#suSkinNote').value || null,
   };
 
   const submitBtn = signupForm.querySelector('button[type=submit]');
@@ -191,6 +195,48 @@ async function loadMyPets(){
     }));
     renderPillScroll();
   } catch { /* 실패해도 화면은 기존 값 그대로 둔다 */ }
+  loadMyRecommend();
+  loadMyPurchases();
+}
+
+// 구매 이력 탭(.purchase-pill)을 실제 DB의 구매 내역으로 채운다 (GET /me/purchases)
+async function loadMyPurchases(){
+  try {
+    const res = await fetch(`${API}/me/purchases`, { headers: { Authorization: `Bearer ${userToken}` } });
+    if (!res.ok) return;
+    const rows = await res.json();
+    purchases = rows.map((p) => ({
+      purchase_id: p.purchase_id,
+      name: p.product_name,
+      reviewed: p.rating != null,
+    }));
+    if (activeTab === 'purchases') renderPillScroll();
+  } catch { /* 실패해도 기존 값(빈 목록) 그대로 둔다 */ }
+}
+
+// "오늘의 추천"(.cards) 목업을 로그인 직후 가입 설문 기준 추천(GET /me/recommend)으로 갈아끼운다
+async function loadMyRecommend(){
+  const cardsEl = document.querySelector('.cards');
+  if (!cardsEl) return;
+  try {
+    const res = await fetch(`${API}/me/recommend`, { headers: { Authorization: `Bearer ${userToken}` } });
+    if (!res.ok) return;
+    const { found } = await res.json();
+    if (!found || !found.length) return; // 후보가 없으면 기존 목업을 그대로 둔다
+    cardsEl.innerHTML = found.map((p) => `
+      <div class="card">
+        <div class="card-thumb">🐾</div>
+        <div class="brand">${p.brand}</div>
+        ${p.product_type ? `<span class="badge-type">${p.product_type}</span>` : ''}
+        <div class="name">${p.name}</div>
+        <div class="review">"${p.review}"</div>
+        <div class="card-foot">
+          <span class="price">${p.price_krw.toLocaleString()}원</span>
+          <span class="badge-score">유사도 ${p.score.toFixed(2)}</span>
+        </div>
+        <button type="button" class="btn-buy" data-price="${p.price_krw}" data-product-id="${p.product_id}">구매하기</button>
+      </div>`).join('');
+  } catch { /* 실패해도 기존 목업 카드가 그대로 보인다 */ }
 }
 
 // 탭/리뷰버튼은 매번 새로 그려지니 위임으로 한 번만 건다
@@ -211,10 +257,37 @@ $('#tabSwitch').addEventListener('click', (e) => {
 function openReviewPanel(i){
   reviewPanel.hidden = false;
   reviewPanel.innerHTML = `
+    <select id="reviewRating">
+      <option value="5">★★★★★</option>
+      <option value="4">★★★★</option>
+      <option value="3">★★★</option>
+      <option value="2">★★</option>
+      <option value="1">★</option>
+    </select>
     <textarea id="reviewText" placeholder="${purchases[i].name} 후기를 남겨주세요"></textarea>
-    <button type="button" id="reviewSubmit">등록</button>`;
-  $('#reviewSubmit').addEventListener('click', () => {
-    // 실제로는 POST /api/purchases/{purchase_id}/review 로 review 테이블에 INSERT
+    <button type="button" id="reviewSubmit">등록</button>
+    <div class="modal-error" id="reviewError"></div>`;
+  $('#reviewSubmit').addEventListener('click', async () => {
+    const body = $('#reviewText').value.trim();
+    if (!body) return;
+    const rating = Number($('#reviewRating').value);
+    const reviewError = $('#reviewError');
+    let res;
+    try {
+      res = await fetch(`${API}/me/purchases/${purchases[i].purchase_id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+        body: JSON.stringify({ rating, body }),
+      });
+    } catch {
+      reviewError.textContent = '서버에 연결할 수 없습니다.';
+      return;
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      reviewError.textContent = err.detail || '리뷰 등록에 실패했습니다.';
+      return;
+    }
     purchases[i].reviewed = true;
     reviewPanel.hidden = true;
     renderPillScroll();
@@ -256,7 +329,7 @@ renderQuota();
 function renderAskSources(sources){
   if (!sources || !sources.length){ askSourcesEl.innerHTML = ''; return; }
   askSourcesEl.innerHTML = sources.slice(0, 3).map((s) => `
-    <div class="ai-source-item">${s.name} (${s.brand}) · 유사도 ${s.score.toFixed(3)}</div>`).join('');
+    <div class="ai-source-item">${s.name} (${s.brand})${s.product_type ? ` · <span class="badge-type">${s.product_type}</span>` : ''} · 유사도 ${s.score.toFixed(3)}</div>`).join('');
 }
 
 askForm.addEventListener('submit', async (e) => {
@@ -270,8 +343,9 @@ askForm.addEventListener('submit', async (e) => {
   askInput.value = '';
   askBtn.disabled = true;
   askAnswerEl.hidden = false;
-  askAnswerEl.textContent = '';
+  askAnswerEl.textContent = '답변을 생각하고 있어요...';
   askSourcesEl.innerHTML = '';
+  let answering = false; // 첫 delta가 오기 전까지는 위 안내 문구를 그대로 둔다
 
   try {
     const res = await fetch(`${API}/ask/me`, {
@@ -302,7 +376,10 @@ askForm.addEventListener('submit', async (e) => {
         if (!line.trim()) continue;
         try {
           const chunk = JSON.parse(line);
-          if (chunk.type === 'delta') askAnswerEl.textContent += chunk.text;
+          if (chunk.type === 'delta') {
+            if (!answering) { askAnswerEl.textContent = ''; answering = true; }
+            askAnswerEl.textContent += chunk.text;
+          }
           else if (chunk.type === 'sources') renderAskSources(chunk.sources);
           else if (chunk.type === 'error') askAnswerEl.textContent = chunk.message;
         } catch { /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
@@ -334,7 +411,7 @@ askForm.addEventListener('submit', async (e) => {
   if (cached){ applyBg(JSON.parse(cached)); return; }
 
   try {
-    const res = await fetch(`${API}/background?query=dog,cat`);
+    const res = await fetch(`${API}/background`);
     if (!res.ok) return; // 실패하면 CSS의 --cream 단색 배경 그대로 둔다
     const data = await res.json();
     sessionStorage.setItem('pageBg', JSON.stringify(data));
@@ -343,16 +420,32 @@ askForm.addEventListener('submit', async (e) => {
 })();
 
 // ---------------- 추천 카드: 구매하기 -> 구매 이력에 반영 ----------------
-document.querySelectorAll('.btn-buy').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    if (btn.classList.contains('bought')) return;
+// .cards 안쪽은 loadMyRecommend()가 통째로 다시 그리니, 버튼마다 리스너를 다는 대신
+// 컨테이너 하나에 위임한다 (pillScrollEl과 같은 이유 - 새로 그려진 버튼도 그대로 먹힌다).
+document.querySelector('.cards').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-buy');
+  if (!btn || btn.classList.contains('bought')) return;
+  const productId = btn.dataset.productId;
+
+  if (productId) {
+    // 로그인 후 실제 추천 카드 - POST /me/purchases로 진짜 purchase 행을 만든다
+    try {
+      const res = await fetch(`${API}/me/purchases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+        body: JSON.stringify({ product_id: Number(productId) }),
+      });
+      if (!res.ok) return;
+    } catch { return; }
+    loadMyPurchases();
+  } else {
+    // 로그인 전 안내용 목업 카드 - 화면 데모로만 반영한다
     const card = btn.closest('.card');
     const name = card.querySelector('.name').textContent;
     const price = Number(btn.dataset.price);
-    // 실제로는 POST /api/purchases 로 purchase 테이블에 INSERT.
     purchases.push({ name, price, date: new Date().toISOString().slice(0, 10), reviewed: false });
-    btn.textContent = '구매 완료 ✓';
-    btn.classList.add('bought');
     if (activeTab === 'purchases') renderPillScroll();
-  });
+  }
+  btn.textContent = '구매 완료 ✓';
+  btn.classList.add('bought');
 });
