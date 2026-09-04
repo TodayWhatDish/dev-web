@@ -81,10 +81,27 @@ loginForm.addEventListener('submit', async (e) => {
   loadMyPets();
 });
 
+const suAllergiesEl = $('#suPetAllergies');
+let allergensLoaded = false;
+
+// 알레르겐 목록은 GET /allergens에서 딱 한 번만 받아온다 - 회원가입 모달 열 때마다 다시 안 부른다
+async function loadAllergenOptions(){
+  if (allergensLoaded) return;
+  try {
+    const res = await fetch(`${API}/allergens`);
+    if (!res.ok) return;
+    const names = await res.json();
+    suAllergiesEl.innerHTML = names.map((name) => `
+      <label><input type="checkbox" value="${name}">${name}</label>`).join('');
+    allergensLoaded = true;
+  } catch { /* 목록을 못 받아도 나머지 가입 절차는 그대로 진행한다 */ }
+}
+
 signupBtn.addEventListener('click', () => {
   signupError.textContent = '';
   signupForm.reset();
   signupOverlay.hidden = false;
+  loadAllergenOptions();
 });
 $('#signupCancel').addEventListener('click', () => { signupOverlay.hidden = true; });
 
@@ -99,9 +116,15 @@ signupForm.addEventListener('submit', async (e) => {
     phone: $('#suPhone').value || null,
     region: $('#suRegion').value || null,
     pet_name: $('#suPetName').value,
+    pet_species: document.querySelector('input[name="suPetSpecies"]:checked')?.value || null,
     pet_gender: $('#suPetGender').value || null,
     pet_birth_date: $('#suPetBirth').value || null,
     pet_weight_kg: $('#suPetWeight').value ? Number($('#suPetWeight').value) : null,
+    pet_size: $('#suPetSize').value ? Number($('#suPetSize').value) : null,
+    pet_allergies: [...suAllergiesEl.querySelectorAll('input:checked')].map((el) => el.value),
+    pet_activity_level: $('#suPetActivity').value ? Number($('#suPetActivity').value) : null,
+    diet_note: $('#suDietNote').value || null,
+    skin_note: $('#suSkinNote').value || null,
   };
 
   const submitBtn = signupForm.querySelector('button[type=submit]');
@@ -172,6 +195,48 @@ async function loadMyPets(){
     }));
     renderPillScroll();
   } catch { /* 실패해도 화면은 기존 값 그대로 둔다 */ }
+  loadMyRecommend();
+  loadMyPurchases();
+}
+
+// 구매 이력 탭(.purchase-pill)을 실제 DB의 구매 내역으로 채운다 (GET /me/purchases)
+async function loadMyPurchases(){
+  try {
+    const res = await fetch(`${API}/me/purchases`, { headers: { Authorization: `Bearer ${userToken}` } });
+    if (!res.ok) return;
+    const rows = await res.json();
+    purchases = rows.map((p) => ({
+      purchase_id: p.purchase_id,
+      name: p.product_name,
+      reviewed: p.rating != null,
+    }));
+    if (activeTab === 'purchases') renderPillScroll();
+  } catch { /* 실패해도 기존 값(빈 목록) 그대로 둔다 */ }
+}
+
+// "오늘의 추천"(.cards) 목업을 로그인 직후 가입 설문 기준 추천(GET /me/recommend)으로 갈아끼운다
+async function loadMyRecommend(){
+  const cardsEl = document.querySelector('.cards');
+  if (!cardsEl) return;
+  try {
+    const res = await fetch(`${API}/me/recommend`, { headers: { Authorization: `Bearer ${userToken}` } });
+    if (!res.ok) return;
+    const { found } = await res.json();
+    if (!found || !found.length) return; // 후보가 없으면 기존 목업을 그대로 둔다
+    cardsEl.innerHTML = found.map((p) => `
+      <div class="card">
+        <div class="card-thumb">🐾</div>
+        <div class="brand">${p.brand}</div>
+        ${p.product_type ? `<span class="badge-type">${p.product_type}</span>` : ''}
+        <div class="name">${p.name}</div>
+        <div class="review">"${p.review}"</div>
+        <div class="card-foot">
+          <span class="price">${p.price_krw.toLocaleString()}원</span>
+          <span class="badge-score">유사도 ${p.score.toFixed(2)}</span>
+        </div>
+        <button type="button" class="btn-buy" data-price="${p.price_krw}" data-product-id="${p.product_id}">구매하기</button>
+      </div>`).join('');
+  } catch { /* 실패해도 기존 목업 카드가 그대로 보인다 */ }
 }
 
 // 탭/리뷰버튼은 매번 새로 그려지니 위임으로 한 번만 건다
@@ -192,10 +257,37 @@ $('#tabSwitch').addEventListener('click', (e) => {
 function openReviewPanel(i){
   reviewPanel.hidden = false;
   reviewPanel.innerHTML = `
+    <select id="reviewRating">
+      <option value="5">★★★★★</option>
+      <option value="4">★★★★</option>
+      <option value="3">★★★</option>
+      <option value="2">★★</option>
+      <option value="1">★</option>
+    </select>
     <textarea id="reviewText" placeholder="${purchases[i].name} 후기를 남겨주세요"></textarea>
-    <button type="button" id="reviewSubmit">등록</button>`;
-  $('#reviewSubmit').addEventListener('click', () => {
-    // 실제로는 POST /api/purchases/{purchase_id}/review 로 review 테이블에 INSERT
+    <button type="button" id="reviewSubmit">등록</button>
+    <div class="modal-error" id="reviewError"></div>`;
+  $('#reviewSubmit').addEventListener('click', async () => {
+    const body = $('#reviewText').value.trim();
+    if (!body) return;
+    const rating = Number($('#reviewRating').value);
+    const reviewError = $('#reviewError');
+    let res;
+    try {
+      res = await fetch(`${API}/me/purchases/${purchases[i].purchase_id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+        body: JSON.stringify({ rating, body }),
+      });
+    } catch {
+      reviewError.textContent = '서버에 연결할 수 없습니다.';
+      return;
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      reviewError.textContent = err.detail || '리뷰 등록에 실패했습니다.';
+      return;
+    }
     purchases[i].reviewed = true;
     reviewPanel.hidden = true;
     renderPillScroll();
@@ -237,7 +329,7 @@ renderQuota();
 function renderAskSources(sources){
   if (!sources || !sources.length){ askSourcesEl.innerHTML = ''; return; }
   askSourcesEl.innerHTML = sources.slice(0, 3).map((s) => `
-    <div class="ai-source-item">${s.name} (${s.brand}) · 유사도 ${s.score.toFixed(3)}</div>`).join('');
+    <div class="ai-source-item">${s.name} (${s.brand})${s.product_type ? ` · <span class="badge-type">${s.product_type}</span>` : ''} · 유사도 ${s.score.toFixed(3)}</div>`).join('');
 }
 
 askForm.addEventListener('submit', async (e) => {
@@ -251,8 +343,9 @@ askForm.addEventListener('submit', async (e) => {
   askInput.value = '';
   askBtn.disabled = true;
   askAnswerEl.hidden = false;
-  askAnswerEl.textContent = '';
+  askAnswerEl.textContent = '답변을 생각하고 있어요...';
   askSourcesEl.innerHTML = '';
+  let answering = false; // 첫 delta가 오기 전까지는 위 안내 문구를 그대로 둔다
 
   try {
     const res = await fetch(`${API}/ask/me`, {
@@ -283,7 +376,10 @@ askForm.addEventListener('submit', async (e) => {
         if (!line.trim()) continue;
         try {
           const chunk = JSON.parse(line);
-          if (chunk.type === 'delta') askAnswerEl.textContent += chunk.text;
+          if (chunk.type === 'delta') {
+            if (!answering) { askAnswerEl.textContent = ''; answering = true; }
+            askAnswerEl.textContent += chunk.text;
+          }
           else if (chunk.type === 'sources') renderAskSources(chunk.sources);
           else if (chunk.type === 'error') askAnswerEl.textContent = chunk.message;
         } catch { /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
@@ -297,41 +393,59 @@ askForm.addEventListener('submit', async (e) => {
   }
 });
 
-// ---------------- 히어로 배경: Unsplash (백엔드가 GET /background로 키를 대신 들고 프록시) ----------------
+// ---------------- 페이지 배경: Unsplash (백엔드가 GET /background로 키를 대신 들고 프록시) ----------------
+// 카드 하나가 아니라 body 전체에 고정 배경으로 깐다. --cream 스크림을 이미지 위에 겹쳐서
+// 기존 크림 배경 위 글자 대비는 그대로 두고 사진은 은은하게만 비치게 한다.
 // 새로고침마다 부르면 무료 티어 요청 제한(시간당 50회)에 금방 걸리니 세션당 한 번만 부르고 캐싱한다.
-(async function loadHeroBackground(){
-  const heroCard = document.querySelector('.hero-card');
+(async function loadPageBackground(){
   const creditEl = $('#photoCredit');
 
   function applyBg({ url, credit_name, credit_link }){
-    heroCard.style.backgroundImage = `url(${url})`;
+    document.body.style.backgroundImage =
+      `linear-gradient(rgba(250,246,238,.85), rgba(250,246,238,.85)), url(${url})`;
     creditEl.innerHTML = `Photo by <a href="${credit_link}?utm_source=today-mung-nyang&utm_medium=referral" target="_blank" rel="noopener">${credit_name}</a> on <a href="https://unsplash.com/?utm_source=today-mung-nyang&utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>`;
     creditEl.hidden = false;
   }
 
-  const cached = sessionStorage.getItem('heroBg');
+  const cached = sessionStorage.getItem('pageBg');
   if (cached){ applyBg(JSON.parse(cached)); return; }
 
   try {
-    const res = await fetch(`${API}/background?query=dog,cat`);
-    if (!res.ok) return; // 실패하면 CSS의 --sand 단색 배경 그대로 둔다
+    const res = await fetch(`${API}/background`);
+    if (!res.ok) return; // 실패하면 CSS의 --cream 단색 배경 그대로 둔다
     const data = await res.json();
-    sessionStorage.setItem('heroBg', JSON.stringify(data));
+    sessionStorage.setItem('pageBg', JSON.stringify(data));
     applyBg(data);
   } catch { /* 서버 연결 안 돼도 배경색 폴백이 있으니 조용히 넘어간다 */ }
 })();
 
 // ---------------- 추천 카드: 구매하기 -> 구매 이력에 반영 ----------------
-document.querySelectorAll('.btn-buy').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    if (btn.classList.contains('bought')) return;
+// .cards 안쪽은 loadMyRecommend()가 통째로 다시 그리니, 버튼마다 리스너를 다는 대신
+// 컨테이너 하나에 위임한다 (pillScrollEl과 같은 이유 - 새로 그려진 버튼도 그대로 먹힌다).
+document.querySelector('.cards').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-buy');
+  if (!btn || btn.classList.contains('bought')) return;
+  const productId = btn.dataset.productId;
+
+  if (productId) {
+    // 로그인 후 실제 추천 카드 - POST /me/purchases로 진짜 purchase 행을 만든다
+    try {
+      const res = await fetch(`${API}/me/purchases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+        body: JSON.stringify({ product_id: Number(productId) }),
+      });
+      if (!res.ok) return;
+    } catch { return; }
+    loadMyPurchases();
+  } else {
+    // 로그인 전 안내용 목업 카드 - 화면 데모로만 반영한다
     const card = btn.closest('.card');
     const name = card.querySelector('.name').textContent;
     const price = Number(btn.dataset.price);
-    // 실제로는 POST /api/purchases 로 purchase 테이블에 INSERT.
     purchases.push({ name, price, date: new Date().toISOString().slice(0, 10), reviewed: false });
-    btn.textContent = '구매 완료 ✓';
-    btn.classList.add('bought');
     if (activeTab === 'purchases') renderPillScroll();
-  });
+  }
+  btn.textContent = '구매 완료 ✓';
+  btn.classList.add('bought');
 });

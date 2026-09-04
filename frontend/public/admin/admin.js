@@ -16,6 +16,8 @@ const petCategory = (speciesCsv) => {
   return "미등록";
 };
 const genderLabel = (g) => (g === "M" ? "♂" : g === "F" ? "♀" : "-");
+// pet.activity_level 코드값 (1 적음 / 2 보통 / 3 많음) - app/core/config.py의 SIZE_LABELS와 같은 방식
+const activityLabel = (level) => ({ 1: "적음", 2: "보통", 3: "많음" }[level] || "-");
 // 반려동물 생년월일로 나이 계산 (사람 나이가 아니다 - user 테이블엔 생년월일이 없다)
 const ageLabel = (birthDate) => {
   if (!birthDate) return "-";
@@ -241,6 +243,10 @@ const renderCustomerDetail = (c) => {
         <span>가입일</span><b>${(c.created_at || "").slice(0, 10)}</b>
         <span>구매 건수</span><b>${(c.purchases || []).length}건</b>
         <span>총 구매액</span><b>${totalSpent.toLocaleString()}원</b>
+        <span>활동량</span><b>${activityLabel((c.pets || [])[0]?.activity_level)}</b>
+        <span>알러지</span><b>${(c.pets || [])[0]?.allergies || "-"}</b>
+        <span>식성</span><b>${(c.pets || [])[0]?.diet_note ?? "-"}</b>
+        <span>피부</span><b>${(c.pets || [])[0]?.skin_note ?? "-"}</b>
       </div>
     </div>
 
