@@ -18,6 +18,9 @@ const petCategory = (speciesCsv) => {
 const genderLabel = (g) => (g === "M" ? "♂" : g === "F" ? "♀" : "-");
 // pet.activity_level 코드값 (1 적음 / 2 보통 / 3 많음) - app/core/config.py의 SIZE_LABELS와 같은 방식
 const activityLabel = (level) => ({ 1: "적음", 2: "보통", 3: "많음" }[level] || "-");
+// pet.size 코드값 - app/core/config.py의 SIZE_LABELS와 같은 표
+const sizeLabel = (size) => ({ 1: "초소형", 2: "소형", 3: "중형", 4: "대형", 5: "초대형" }[size] || "-");
+const neuteredLabel = (n) => (n === 1 ? "완료" : n === 0 ? "안 함" : "-");
 // 반려동물 생년월일로 나이 계산 (사람 나이가 아니다 - user 테이블엔 생년월일이 없다)
 const ageLabel = (birthDate) => {
   if (!birthDate) return "-";
@@ -232,7 +235,7 @@ const renderCustomerDetail = (c) => {
       <div class="profile-left">
         <div class="avatar-lg">${petEmoji((c.pets || [])[0]?.animal_category)}</div>
         <div>
-          <div class="profile-name">${c.name}</div>
+          <div class="profile-name">${c.name} <span class="cust-id">ID ${c.user_id}</span></div>
           <div class="profile-tags">${petTags}</div>
         </div>
       </div>
@@ -243,6 +246,10 @@ const renderCustomerDetail = (c) => {
         <span>가입일</span><b>${(c.created_at || "").slice(0, 10)}</b>
         <span>구매 건수</span><b>${(c.purchases || []).length}건</b>
         <span>총 구매액</span><b>${totalSpent.toLocaleString()}원</b>
+        <span>성별</span><b>${genderLabel((c.pets || [])[0]?.gender)}</b>
+        <span>체급</span><b>${sizeLabel((c.pets || [])[0]?.size)}</b>
+        <span>몸무게</span><b>${(c.pets || [])[0]?.weight_kg != null ? `${(c.pets || [])[0].weight_kg}kg` : "-"}</b>
+        <span>중성화</span><b>${neuteredLabel((c.pets || [])[0]?.neutered)}</b>
         <span>활동량</span><b>${activityLabel((c.pets || [])[0]?.activity_level)}</b>
         <span>알러지</span><b>${(c.pets || [])[0]?.allergies || "-"}</b>
         <span>식성</span><b>${(c.pets || [])[0]?.diet_note ?? "-"}</b>
@@ -344,19 +351,53 @@ const closeAllPanels = () => {
 const sidebarEl = document.querySelector(".sidebar");
 const verifyView = document.querySelector("#verifyView");
 const systemView = document.querySelector("#systemView");
+const questionsView = document.querySelector("#questionsView");
 
 const switchView = (view) => {
   document.querySelectorAll(".view-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   sidebarEl.hidden = view !== "members";
   mainArea.hidden = view !== "members";
   verifyView.hidden = view !== "verify";
+  questionsView.hidden = view !== "questions";
   systemView.hidden = view !== "system";
   if (view === "system") checkSystemStatus();
+  if (view === "questions") loadQuestions();
 };
 
 document.querySelectorAll(".view-btn").forEach((btn) => {
   btn.addEventListener("click", () => switchView(btn.dataset.view));
 });
+
+// ==================================
+//  고객 질문 기록 (질문 화면) - logs/query_log.jsonl의 customer_question 줄을 그대로 보여준다
+// ==================================
+const loadQuestions = async () => {
+  const listEl = document.querySelector("#questionsList");
+  listEl.innerHTML = `<div class="ai-loading" style="height:auto;padding:10px 0;"><div class="spinner"></div>불러오는 중...</div>`;
+  let rows;
+  try {
+    const res = await fetch(`${API}/api/questions`, { headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    rows = await res.json();
+  } catch {
+    listEl.innerHTML = `<p style="font-size:13px;color:var(--muted);">불러오지 못했습니다.</p>`;
+    return;
+  }
+  if (!rows.length) {
+    listEl.innerHTML = `<p style="font-size:13px;color:var(--muted);">아직 질문 기록이 없습니다.</p>`;
+    return;
+  }
+  listEl.innerHTML = rows.map((q) => `
+    <div class="question-item">
+      <div class="q-meta">${q.time}${q.user_id != null ? ` · user_id ${q.user_id}` : ""}</div>
+      <div class="q-text">${q.user_query}</div>
+      <div class="q-label">추천 후보 top3</div>
+      <div class="q-candidates">${(q.matched || []).slice(0, 3).map((m) => `
+        <span class="q-chip ${m.product_type === "간식" ? "snack" : "feed"}"><span class="q-chip-type">${m.product_type || "?"}</span>${m.name} · ${m.score.toFixed(3)}</span>`).join("")}</div>
+      <div class="q-label">AI 답변</div>
+      ${q.ok ? `<div class="q-answer">${q.answer}</div>` : `<div class="q-error">실패: ${q.error || ""}</div>`}
+    </div>`).join("");
+};
 
 // ==================================
 //  DB / API 연결 상태 (시스템 화면) - /ready 를 주기적으로 폴링
