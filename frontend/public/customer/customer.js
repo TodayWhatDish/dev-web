@@ -3,7 +3,10 @@
 const $ = (sel) => document.querySelector(sel);
 
 // admin.js와 같은 자리 - 프론트(3000)와 백엔드(8000)가 다른 오리진이라 직접 적는다.
-const API = "http://localhost:8000";
+// 컨테이너(nginx 리버스 프록시)에서는 같은 오리진의 /api 로 간다 - CORS 가 필요 없다.
+// 로컬 개발(python -m http.server 3000)에서는 종전대로 8000 을 직접 부른다.
+const API = location.port === "3000" ? "http://localhost:8000" : "/api";
+
 
 let isLoggedIn = false;
 let userToken = localStorage.getItem("userToken") || "";
