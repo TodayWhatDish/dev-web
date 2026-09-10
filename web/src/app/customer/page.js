@@ -5,8 +5,9 @@
 import { useEffect, useRef, useState } from "react";
 import "./customer.css";
 
-// admin.js와 같은 자리 - 프론트(3000)와 백엔드(8000)가 다른 오리진이라 직접 적는다.
-const API = "http://localhost:8000";
+// admin.js와 같은 자리 - 프론트와 백엔드가 다른 오리진이라 직접 적는다.
+// 배포 주소는 Vercel 프로젝트의 NEXT_PUBLIC_API_URL 환경변수로 넣는다 - 코드는 안 건드린다.
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const QUOTA_MAX = 5;
 
 // 재구조화안 그대로 보리/나비 두 마리, 카드 3장을 기본값(목업)으로 둔다.
