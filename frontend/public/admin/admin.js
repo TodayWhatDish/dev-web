@@ -1,7 +1,10 @@
 // dev-web으로 분리되면서 프론트(Next.js)와 백엔드(FastAPI)가 서로 다른 오리진이 된다.
 // window.location.origin(=프론트 자기 자신) 대신 백엔드 주소를 직접 적는다.
 // 배포 도메인이 정해지면 여기만 바꾸면 된다.
-const API = "http://localhost:8000";
+// 컨테이너(nginx 리버스 프록시)에서는 같은 오리진의 /api 로 간다 - CORS 가 필요 없다.
+// 로컬 개발(python -m http.server 3000)에서는 종전대로 8000 을 직접 부른다.
+const API = location.port === "3000" ? "http://localhost:8000" : "/api";
+
 
 // 개/고양이 두 종만 있는 데이터셋 - 종 이름으로 이모지 매핑 (아바타/태그에 사용)
 const petEmoji = (species) => (species === "개" ? "🐶" : species === "고양이" ? "🐱" : "🐾");
