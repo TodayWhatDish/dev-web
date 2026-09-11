@@ -1,44 +1,42 @@
-/* 색·서체·둥글기 값은 사용자가 준 재구조화안(todaywhatdish_redesign.html)을 그대로 옮겼다.
+/* 블루 톤 + 귀여운 무드로 재단장 - 강아지 사진(public/customer-bg.png)을 배경으로 고정하고
+   팔레트를 하늘색 계열로, 폰트를 Comic Relief로 바꿨다. 변수 이름은 그대로 두고 값만 바꿔서
+   diff를 최소화했다(--teal/--coral 등 이름은 색상 용도를 가리키던 자리 그대로 재사용).
    실 데이터 연결 전이라 반려동물 2마리 · 구매 이력 · 상품 3장은 전부 customer.js 안 목업이다.
    상품 썸네일은 이미지 대신 이모지 하나만 쓴다 - 실사진은 톤이 바뀔 때마다 다시 골라야 해서 번거롭다. */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --cream: #FAF6EE;
-  --sand: #EDE3D3;
-  --ink: #22302A;
-  --ink-soft: #4C5C54;
-  --teal: #2F6E62;
-  --teal-deep: #1E4A42;
-  --coral: #E8935B;
-  --coral-soft: #FBE4D0;
-  --yellow: #F5C56B;
-  --line: #DDD3BF;
+  --cream: #EAF4FF;
+  --sand: #D6E9FB;
+  --ink: #20334A;
+  --ink-soft: #5C7690;
+  --teal: #3E8FD0;
+  --teal-deep: #235C93;
+  --coral: #FF9E6D;
+  --coral-soft: #FFE7D6;
+  --yellow: #FFD873;
+  --line: #C9DEF2;
 }
 
-/* 배경 사진은 Unsplash에서 가져온다 (customer.js, GET /background - 백엔드가 키를 들고 프록시).
-   body에 고정(fixed) 배경으로 깔고 그 위에 --cream 톤 스크림을 얹어서, 스크롤 내내 은은하게
-   사진이 비치면서도 카드·글자 대비는 원래 크림 배경과 똑같이 유지되게 한다.
-   실패하면 fetch 전과 똑같이 --cream 단색 배경으로 남는다 - 별도 폴백 이미지가 필요 없다. */
+/* 배경은 사용자가 고른 강아지 사진(public/customer-bg.png)으로 고정한다 - 더 이상 Unsplash를
+   fetch하지 않는다(예전엔 /background 프록시로 랜덤성 없는 고정 사진 하나를 받아왔는데, 이제
+   그 사진 자체를 정적 파일로 박아뒀으니 API 호출도 크레딧 표시도 필요 없다). */
 body {
-  font-family: 'Pretendard', -apple-system, sans-serif;
-  background: var(--cream);
+  font-family: 'Comic Relief', -apple-system, sans-serif;
+  background: linear-gradient(rgba(234,244,255,.78), rgba(234,244,255,.78)), url('/customer-bg.png');
   background-attachment: fixed;
   background-size: cover;
   background-position: center;
   color: var(--ink);
   line-height: 1.5;
 }
-.photo-credit { position: fixed; right: 14px; bottom: 10px; font-size: 10.5px; color: var(--ink-soft); z-index: 40; }
-.photo-credit[hidden] { display: none; }
-.photo-credit a { color: inherit; }
 
 .page { max-width: 1180px; margin: 0 auto; padding: 28px 32px 80px; }
 
 /* ===== 헤더 ===== */
 header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
 
-.logo { display: flex; align-items: center; gap: 8px; font-family: 'Gowun Batang', serif; font-size: 22px; font-weight: 700; color: var(--ink); }
+.logo { display: flex; align-items: center; gap: 8px; font-family: 'Comic Relief', sans-serif; font-size: 22px; font-weight: 700; color: var(--ink); }
 .logo-mark { width: 34px; height: 34px; border-radius: 10px; background: var(--teal); display: flex; align-items: center; justify-content: center; font-size: 16px; }
 
 .auth-buttons { display: flex; align-items: center; gap: 14px; }
@@ -46,7 +44,8 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .admin-link { font-size: 12.5px; color: var(--ink-soft); text-decoration: none; padding-bottom: 2px; border-bottom: 1px dashed var(--line); }
 .admin-link:hover { color: var(--ink); border-bottom-color: var(--ink-soft); }
 
-.btn { font-family: 'Pretendard', -apple-system, sans-serif; font-weight: 600; font-size: 14px; padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; }
+.btn { font-family: inherit; font-weight: 600; font-size: 14px; padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(62,143,208,0.22); }
 .btn-ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
 .btn-solid { background: var(--teal-deep); color: white; }
 
@@ -79,7 +78,7 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-top: 36px; }
 
 .hero-copy .eyebrow { font-size: 13.5px; font-weight: 600; color: var(--teal); margin-bottom: 14px; }
-.hero-copy h1 { font-family: 'Gowun Batang', serif; font-size: 44px; line-height: 1.35; font-weight: 700; color: var(--ink); margin-bottom: 20px; }
+.hero-copy h1 { font-family: 'Comic Relief', sans-serif; font-size: 44px; line-height: 1.35; font-weight: 700; color: var(--ink); margin-bottom: 20px; }
 .hero-copy h1 .hl { color: var(--coral); }
 .hero-copy p { font-size: 15.5px; color: var(--ink-soft); max-width: 42ch; margin-bottom: 28px; }
 .hero-actions { display: flex; align-items: center; gap: 22px; }
@@ -116,7 +115,7 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .modal-overlay { position: fixed; inset: 0; background: rgba(34,48,42,0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
 .modal-overlay[hidden] { display: none; }
 .modal-box { background: white; border-radius: 20px; padding: 28px 26px; width: 100%; max-width: 380px; max-height: 86vh; overflow-y: auto; }
-.modal-box h3 { font-family: 'Gowun Batang', serif; font-size: 20px; margin-bottom: 18px; }
+.modal-box h3 { font-family: 'Comic Relief', sans-serif; font-size: 20px; margin-bottom: 18px; }
 .modal-box form { display: flex; flex-direction: column; gap: 10px; }
 .modal-box input, .modal-box select { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 13.5px; color: var(--ink); }
 .modal-box hr { border: none; border-top: 1px dashed var(--line); margin: 6px 0; }
@@ -133,7 +132,7 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 
 /* ===== 추천 섹션 ===== */
 .section-title { display: flex; align-items: baseline; justify-content: space-between; margin: 56px 0 22px; }
-.section-title h2 { font-family: 'Gowun Batang', serif; font-size: 24px; font-weight: 700; }
+.section-title h2 { font-family: 'Comic Relief', sans-serif; font-size: 24px; font-weight: 700; }
 .section-title span { font-size: 13px; color: var(--ink-soft); }
 
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
@@ -148,6 +147,34 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .badge-type { font-size: 11.5px; font-weight: 700; color: #fff; background: var(--coral); padding: 4px 10px; border-radius: 999px; }
 .btn-buy { margin-top: 2px; width: 100%; padding: 12px; border-radius: 12px; border: none; background: var(--teal-deep); color: #fff; font-weight: 700; font-size: 13.5px; cursor: pointer; }
 .btn-buy.bought { background: var(--sand); color: var(--ink-soft); cursor: default; }
+
+/* ===== 동적 인터랙션: hover 시 살짝 뜨는 느낌 + 진입 애니메이션으로 정적인 느낌을 줄인다 ===== */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hero { animation: fadeUp .5s ease both; }
+.cards .card { animation: fadeUp .5s ease both; }
+.cards .card:nth-child(1) { animation-delay: .05s; }
+.cards .card:nth-child(2) { animation-delay: .12s; }
+.cards .card:nth-child(3) { animation-delay: .19s; }
+
+.card { transition: transform .15s ease, box-shadow .15s ease; }
+.card:hover { transform: translateY(-4px); box-shadow: 0 10px 24px rgba(32,51,74,0.14); }
+.card-thumb { transition: transform .2s ease; }
+.card:hover .card-thumb { transform: scale(1.06); }
+
+.btn-cta, .btn-buy, .ai-input-row button, .purchase-pill .p-review-btn, .review-panel button {
+  transition: transform .12s ease, box-shadow .12s ease, background .15s ease;
+}
+.btn-cta:hover, .btn-buy:not(.bought):hover, .ai-input-row button:not(:disabled):hover {
+  transform: translateY(-1px); box-shadow: 0 6px 14px rgba(35,92,147,0.28);
+}
+.pet-pill, .purchase-pill, .tab-switch button { transition: transform .12s ease; }
+.pet-pill:hover, .purchase-pill:hover { transform: translateY(-1px); }
+
+/* 로그인/회원가입/AI 질문 제출 중일 때 버튼에 쓰는 스피너 - admin.css의 .spinner와 같은 방식 */
+.spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.5); border-top-color: #fff; border-radius: 50%; display: inline-block; animation: spin .7s linear infinite; vertical-align: -2px; }
+.spinner.dark { border-color: var(--line); border-top-color: var(--teal-deep); }
 
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; }

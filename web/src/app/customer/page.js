@@ -49,8 +49,6 @@ export default function CustomerPage() {
   const [askAnswerVisible, setAskAnswerVisible] = useState(false);
   const [askSources, setAskSources] = useState([]);
 
-  const [photoCredit, setPhotoCredit] = useState(null);
-
   // ---------------- ref: 화면엔 안 보이지만 값을 들고 있어야 하는 것들 ----------------
   // userToken은 렌더링에 직접 쓰이지 않아서(헤더에만 넣음) state 대신 ref로 둔다 - 바뀌어도 재렌더링 필요 없음
   const userTokenRef = useRef('');
@@ -92,24 +90,8 @@ export default function CustomerPage() {
     } catch { /* 실패해도 기존 목업 카드가 그대로 보인다 */ }
   }
 
-  async function loadPageBackground() {
-    const cached = sessionStorage.getItem('pageBg');
-    if (cached) { applyBg(JSON.parse(cached)); return; }
-    try {
-      const res = await fetch(`${API}/background`);
-      if (!res.ok) return; // 실패하면 CSS의 --cream 단색 배경 그대로 둔다
-      const data = await res.json();
-      sessionStorage.setItem('pageBg', JSON.stringify(data));
-      applyBg(data);
-    } catch { /* 서버 연결 안 돼도 배경색 폴백이 있으니 조용히 넘어간다 */ }
-  }
-  function applyBg({ url, credit_name, credit_link }) {
-    // body 스타일은 화면에 보이지만 React가 그려주는 JSX가 아니라서 상태로 안 두고 직접 건드린다
-    document.body.style.backgroundImage = `linear-gradient(rgba(250,246,238,.85), rgba(250,246,238,.85)), url(${url})`;
-    setPhotoCredit({ name: credit_name, link: credit_link });
-  }
-
-  // 페이지 열릴 때 딱 한 번: 로그인 유지 + 배경 사진. 위에서 정의한 함수들을 쓰니 그 아래 자리에 둔다.
+  // 페이지 열릴 때 딱 한 번: 로그인 유지. 배경 사진은 이제 customer.css에 정적으로 박혀있어
+  // (public/customer-bg.png) 따로 fetch할 게 없다.
   useEffect(() => {
     const token = localStorage.getItem('userToken') || '';
     if (token) {
@@ -119,7 +101,6 @@ export default function CustomerPage() {
       setIsLoggedIn(true);
       loadMyPets();
     }
-    loadPageBackground();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -338,14 +319,8 @@ export default function CustomerPage() {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link
-        href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Comic+Relief:wght@400;700&display=swap"
         rel="stylesheet"
-      />
-      <link
-        rel="stylesheet"
-        as="style"
-        crossOrigin="anonymous"
-        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css"
       />
 
       <div className="page">
@@ -420,7 +395,9 @@ export default function CustomerPage() {
               </div>
               <form className="ai-input-row" onSubmit={handleAskSubmit}>
                 <input type="text" name="question" placeholder="예) 알레르기 없는 소형견 사료 추천해줘" disabled={!isLoggedIn || exhausted} />
-                <button type="submit" disabled={!isLoggedIn || exhausted || asking}>질문</button>
+                <button type="submit" disabled={!isLoggedIn || exhausted || asking}>
+                  {asking ? <span className="spinner dark" /> : '질문'}
+                </button>
               </form>
               <div className={isLoggedIn && exhausted ? 'ai-note upsell' : 'ai-note'}>
                 {!isLoggedIn
@@ -474,7 +451,9 @@ export default function CustomerPage() {
             <div className="modal-error">{loginError}</div>
             <div className="modal-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(false)}>취소</button>
-              <button type="submit" className="btn btn-solid" disabled={loginSubmitting}>로그인</button>
+              <button type="submit" className="btn btn-solid" disabled={loginSubmitting}>
+                {loginSubmitting ? <span className="spinner" /> : '로그인'}
+              </button>
             </div>
           </form>
         </div>
@@ -563,19 +542,12 @@ export default function CustomerPage() {
             <div className="modal-error">{signupError}</div>
             <div className="modal-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setSignupOpen(false)}>취소</button>
-              <button type="submit" className="btn btn-solid" disabled={signupSubmitting}>가입하기</button>
+              <button type="submit" className="btn btn-solid" disabled={signupSubmitting}>
+                {signupSubmitting ? <span className="spinner" /> : '가입하기'}
+              </button>
             </div>
           </form>
         </div>
-      </div>
-
-      <div className="photo-credit" hidden={!photoCredit}>
-        {photoCredit && (
-          <>
-            Photo by <a href={`${photoCredit.link}?utm_source=today-mung-nyang&utm_medium=referral`} target="_blank" rel="noopener noreferrer">{photoCredit.name}</a> on{' '}
-            <a href="https://unsplash.com/?utm_source=today-mung-nyang&utm_medium=referral" target="_blank" rel="noopener noreferrer">Unsplash</a>
-          </>
-        )}
       </div>
     </>
   );
