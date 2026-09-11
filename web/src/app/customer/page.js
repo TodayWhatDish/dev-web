@@ -24,8 +24,26 @@ function pickProductImage(card) {
   return pool[Math.abs(hash) % pool.length];
 }
 
+// 마이페이지 펫 상세 카드용 라벨 - signup 폼 select의 값(1~5, 1~3, M/F)과 동일한 매핑이다.
+const SIZE_LABELS = { 1: '초소형', 2: '소형', 3: '중형', 4: '대형', 5: '초대형' };
+const ACTIVITY_LABELS = { 1: '적음', 2: '보통', 3: '많음' };
+const GENDER_LABELS = { M: '수컷', F: '암컷' };
+function petDetailRows(p) {
+  return [
+    ['종', p.species],
+    ['성별', GENDER_LABELS[p.gender]],
+    ['생일', p.birthDate],
+    ['체중', p.weightKg != null ? `${p.weightKg}kg` : null],
+    ['체구', SIZE_LABELS[p.size]],
+    ['활동량', ACTIVITY_LABELS[p.activityLevel]],
+    ['식성', p.dietNote],
+    ['피부', p.skinNote],
+    ['알레르기', p.allergies],
+  ].filter(([, v]) => v);
+}
+
 // 재구조화안 그대로 보리/나비 두 마리, 카드 3장을 기본값(목업)으로 둔다.
-// 로그인해서 실제 데이터(GET /me/pets, /me/recommend)가 오면 이 값을 통째로 갈아끼운다.
+// 로그인해서 실제 데이터(GET /me/profile, /me/recommend)가 오면 이 값을 통째로 갈아끼운다.
 const DEFAULT_PETS = [
   { name: '보리', species: '강아지', emoji: '🐶' },
   { name: '나비', species: '고양이', emoji: '🐱' },
@@ -39,12 +57,15 @@ const DEFAULT_CARDS = [
 export default function CustomerPage() {
   // ---------------- 상태: 화면에 보이는 걸 결정하는 값은 전부 useState로 ----------------
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [profile, setProfile] = useState(null); // { name, email, phone, region } - GET /me/profile
   const [pets, setPets] = useState(DEFAULT_PETS);
+  const [expandedPet, setExpandedPet] = useState(null); // 펫 핀 눌러서 상세 펼친 인덱스, null이면 접힘
   const [purchases, setPurchases] = useState([]);
   const [cards, setCards] = useState(DEFAULT_CARDS);
   const [cardsLoading, setCardsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('pets');
   const [quotaUsed, setQuotaUsed] = useState(0);
+  const [infoOpen, setInfoOpen] = useState(false); // "어떻게 고르나요?" 안내 모달
 
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -69,16 +90,24 @@ export default function CustomerPage() {
   const userTokenRef = useRef('');
   const cardsSectionRef = useRef(null); // 질문 답변 오면 이 위치로 스크롤
 
-  async function loadMyPets() {
+  // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
+  // (customer_detail() 재사용 - app/api/routes/auth.py 참고).
+  async function loadMyProfile() {
     try {
-      const res = await fetch(`${API}/me/pets`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
       if (res.ok) {
-        const rows = await res.json();
-        setPets(rows.map((p) => ({ name: p.name, species: p.animal_category, emoji: p.animal_category === '고양이' ? '🐱' : '🐶' })));
+        const d = await res.json();
+        setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region });
+        setPets(d.pets.map((p) => ({
+          name: p.name, species: p.animal_category, emoji: p.animal_category === '고양이' ? '🐱' : '🐶',
+          gender: p.gender, birthDate: p.birth_date, weightKg: p.weight_kg,
+          size: p.size, activityLevel: p.activity_level, dietNote: p.diet_note,
+          skinNote: p.skin_note, allergies: p.allergies,
+        })));
+        setPurchases(d.purchases.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
       }
     } catch { /* 실패해도 화면은 기존 값 그대로 둔다 */ }
     loadMyRecommend();
-    loadMyPurchases();
   }
 
   async function loadMyPurchases() {
@@ -118,7 +147,7 @@ export default function CustomerPage() {
       // localStorage는 마운트 후에만 읽을 수 있어서 이 setState는 여기서만 가능하다 (의도된 1회성 렌더 추가)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoggedIn(true);
-      loadMyPets();
+      loadMyProfile();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -160,7 +189,7 @@ export default function CustomerPage() {
     localStorage.setItem('userToken', access_token);
     setLoginOpen(false);
     setIsLoggedIn(true);
-    loadMyPets();
+    loadMyProfile();
   }
 
   // 알레르겐 목록은 GET /allergens에서 딱 한 번만 받아온다 - 회원가입 모달 열 때마다 다시 안 부른다
@@ -223,7 +252,7 @@ export default function CustomerPage() {
     localStorage.setItem('userToken', access_token);
     setSignupOpen(false);
     setIsLoggedIn(true);
-    loadMyPets();
+    loadMyProfile();
   }
 
   // ---------------- 리뷰 남기기 ----------------
@@ -345,7 +374,7 @@ export default function CustomerPage() {
       <div className="page">
         <header>
           <div className="logo">
-            <div className="logo-mark">🐾</div>
+            <img className="logo-mark" src="/logo-paw.png" alt="" />
             오늘뭐멍냥
           </div>
           <div className="auth-buttons">
@@ -359,6 +388,12 @@ export default function CustomerPage() {
         <div className="side-panel">
           <button type="button" className="side-panel-tab">마이페이지</button>
           <div className="side-panel-body">
+            {profile && (
+              <div className="profile-info">
+                <div className="profile-name">{profile.name}</div>
+                <div className="profile-meta">{profile.email}{profile.phone && ` · ${profile.phone}`}{profile.region && ` · ${profile.region}`}</div>
+              </div>
+            )}
             <div className="tab-switch">
               <button type="button" className={activeTab === 'pets' ? 'active' : ''} onClick={() => { setActiveTab('pets'); setReviewIndex(null); }}>우리 아이</button>
               <button type="button" className={activeTab === 'purchases' ? 'active' : ''} onClick={() => { setActiveTab('purchases'); setReviewIndex(null); }}>구매 이력</button>
@@ -367,7 +402,15 @@ export default function CustomerPage() {
               {activeTab === 'pets' ? (
                 pets.length === 0
                   ? <span className="empty-msg">등록된 반려동물이 없어요.</span>
-                  : pets.map((p, i) => <div className="pet-pill" key={i}><div className="avatar">{p.emoji}</div>{p.name}</div>)
+                  : pets.map((p, i) => (
+                    <div
+                      className={expandedPet === i ? 'pet-pill active' : 'pet-pill'}
+                      key={i}
+                      onClick={() => setExpandedPet(expandedPet === i ? null : i)}
+                    >
+                      <div className="avatar">{p.emoji}</div>{p.name}
+                    </div>
+                  ))
               ) : (
                 purchases.length === 0
                   ? <span className="empty-msg">아직 구매한 상품이 없어요.</span>
@@ -381,6 +424,14 @@ export default function CustomerPage() {
                   ))
               )}
             </div>
+
+            {activeTab === 'pets' && expandedPet !== null && pets[expandedPet] && (
+              <div className="pet-detail">
+                {petDetailRows(pets[expandedPet]).map(([label, value]) => (
+                  <div className="pet-detail-row" key={label}><span>{label}</span><span>{value}</span></div>
+                ))}
+              </div>
+            )}
 
             {reviewIndex !== null && (
               <form className="review-panel" onSubmit={(e) => handleReviewSubmit(e, reviewIndex)}>
@@ -405,8 +456,8 @@ export default function CustomerPage() {
             <h1>우리 아이 오늘 한 끼,<br />근거 있는 <span className="hl">후기</span>로 골라요.</h1>
             <p>실제로 산 사람들의 후기에서 찾은 근거만 보여드려요. 축종·체구·알레르기까지 우리 아이 프로필에 맞춰 걸러낸 사료와 간식이에요.</p>
             <div className="hero-actions">
-              <button type="button" className="btn-cta">오늘의 추천 보러가기 →</button>
-              <button type="button" className="link-quiet">어떻게 고르나요?</button>
+              <button type="button" className="btn-cta" onClick={() => cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>오늘의 추천 보러가기 →</button>
+              <button type="button" className="link-quiet" onClick={() => setInfoOpen(true)}>어떻게 고르나요?</button>
             </div>
           </div>
 
@@ -466,6 +517,16 @@ export default function CustomerPage() {
                 </button>
               </div>
             ))}
+        </div>
+      </div>
+
+      <div className="modal-overlay" hidden={!infoOpen}>
+        <div className="modal-box">
+          <h3>어떻게 고르나요?</h3>
+          <p>실제로 산 사람들의 후기에서 찾은 근거만 보여드려요. 축종·체구·알레르기까지 우리 아이 프로필에 맞춰 걸러낸 사료와 간식이에요.</p>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-solid" onClick={() => setInfoOpen(false)}>확인</button>
+          </div>
         </div>
       </div>
 
