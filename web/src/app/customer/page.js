@@ -364,17 +364,10 @@ export default function CustomerPage() {
 
   return (
     <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link
-        href="https://fonts.googleapis.com/css2?family=Comic+Relief:wght@400;700&display=swap"
-        rel="stylesheet"
-      />
-
       <div className="page">
         <header>
           <div className="logo">
-            <img className="logo-mark" src="/logo-paw.png" alt="" />
+            <img className="logo-mark" src="/dog-mark.png" alt="" />
             오늘뭐멍냥
           </div>
           <div className="auth-buttons">

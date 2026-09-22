@@ -1,0 +1,44 @@
+{
+  "dog-1": {
+    "title": "Brunobrunan",
+    "creator": "Instagram: Brunobrunan",
+    "license": "by",
+    "license_url": "https://creativecommons.org/licenses/by/2.0/",
+    "src": "https://www.flickr.com/photos/13956722@N06/15401148300"
+  },
+  "dog-2": {
+    "title": "Corgi Puppies 104",
+    "creator": "evocateur",
+    "license": "by-sa",
+    "license_url": "https://creativecommons.org/licenses/by-sa/2.0/",
+    "src": "https://www.flickr.com/photos/84989911@N00/8525220235"
+  },
+  "cat-1": {
+    "title": "Mirror cat",
+    "creator": "crsan",
+    "license": "by",
+    "license_url": "https://creativecommons.org/licenses/by/2.0/",
+    "src": "https://www.flickr.com/photos/27539822@N05/4804813050"
+  },
+  "cat-2": {
+    "title": "61 days old: Mona Lisa",
+    "creator": "crsan",
+    "license": "by",
+    "license_url": "https://creativecommons.org/licenses/by/2.0/",
+    "src": "https://www.flickr.com/photos/27539822@N05/4400493633"
+  },
+  "cat-3": {
+    "title": "Orange Cat In Backyard",
+    "creator": "Strikeboom",
+    "license": "by-sa",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "src": "https://commons.wikimedia.org/w/index.php?curid=162451019"
+  },
+  "cat-4": {
+    "title": "White Cat, Black Face, White Background",
+    "creator": "[ まこと ]",
+    "license": "by",
+    "license_url": "https://creativecommons.org/licenses/by/2.0/",
+    "src": "https://www.flickr.com/photos/14380968@N08/8750156403"
+  }
+}
