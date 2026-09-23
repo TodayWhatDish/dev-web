@@ -286,21 +286,22 @@ export default function CustomerPage() {
   // ---------------- 추천 카드: 구매하기 ----------------
   async function handleBuy(card) {
     if (card.bought) return;
-    if (card.productId) {
-      // 로그인 후 실제 추천 카드 - POST /me/purchases로 진짜 purchase 행을 만든다
-      try {
-        const res = await fetch(`${API}/me/purchases`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
-          body: JSON.stringify({ product_id: Number(card.productId) }),
-        });
-        if (!res.ok) return;
-      } catch { return; }
-      loadMyPurchases();
-    } else {
-      // 로그인 전 안내용 목업 카드 - 화면 데모로만 반영한다
-      setPurchases((prev) => [...prev, { name: card.name, reviewed: false }]);
+    if (!isLoggedIn) {
+      // 로그인 안 된 상태 - 목업으로 성공 처리하지 않고 로그인을 유도한다
+      handleLoginClick();
+      return;
     }
+    if (!card.productId) return; // 추천이 아직 안 뜬 자리(실 productId 없음) - 살 게 없다
+    // POST /me/purchases로 진짜 purchase 행을 만든다
+    try {
+      const res = await fetch(`${API}/me/purchases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
+        body: JSON.stringify({ product_id: Number(card.productId) }),
+      });
+      if (!res.ok) return;
+    } catch { return; }
+    loadMyPurchases();
     setCards((prev) => prev.map((c) => (c.key === card.key ? { ...c, bought: true } : c)));
   }
 
