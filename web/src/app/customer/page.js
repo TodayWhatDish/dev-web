@@ -85,6 +85,8 @@ export default function CustomerPage() {
   const [askAnswerVisible, setAskAnswerVisible] = useState(false);
   const [askSources, setAskSources] = useState([]);
 
+  const [loadError, setLoadError] = useState('');
+
   // ---------------- ref: 화면엔 안 보이지만 값을 들고 있어야 하는 것들 ----------------
   // userToken은 렌더링에 직접 쓰이지 않아서(헤더에만 넣음) state 대신 ref로 둔다 - 바뀌어도 재렌더링 필요 없음
   const userTokenRef = useRef('');
@@ -105,8 +107,10 @@ export default function CustomerPage() {
           skinNote: p.skin_note, allergies: p.allergies,
         })));
         setPurchases(d.purchases.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
+      } else {
+        setLoadError('내 정보를 불러오지 못했습니다.')
       }
-    } catch { /* 실패해도 화면은 기존 값 그대로 둔다 */ }
+    } catch { setLoadError('내 정보를 불러오지 못했습니다.')}
     loadMyRecommend();
   }
 
@@ -116,23 +120,26 @@ export default function CustomerPage() {
       if (res.ok) {
         const rows = await res.json();
         setPurchases(rows.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
+      } else {
+        setLoadError('내 구매목록을 불러오지 못했습니다.');
       }
-    } catch { /* 실패해도 기존 값(빈 목록) 그대로 둔다 */ }
+    } catch { setLoadError('내 구매목록을 불러오지 못했습니다.') }
   }
 
   async function loadMyRecommend() {
     setCardsLoading(true);
     try {
       const res = await fetch(`${API}/me/recommend`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
-      if (!res.ok) return;
+      if (!res.ok) { setCards([]); setLoadError('추천을 불러오지 못했습니다.'); return; }
       const { found } = await res.json();
-      if (!found || !found.length) return; // 후보가 없으면 기존 목업 카드를 그대로 둔다
-      setCards(found.map((p) => ({
+      setCards(found && found.length ? found.map((p) => ({
         key: p.product_id, emoji: '🐾', brand: p.brand, name: p.name, review: p.review,
         price: p.price_krw, score: p.score, productType: p.product_type || null,
         productId: p.product_id, bought: false,
-      })));
-    } catch { /* 실패해도 기존 목업 카드가 그대로 보인다 */
+      })) : []);
+    } catch { 
+      setCards([]);
+      setLoadError('추천을 불러오지 못했습니다.');
     } finally {
       setCardsLoading(false);
     }
@@ -149,7 +156,6 @@ export default function CustomerPage() {
       setIsLoggedIn(true);
       loadMyProfile();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------------- 로그인/회원가입 ----------------
