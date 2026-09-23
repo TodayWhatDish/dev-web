@@ -118,6 +118,7 @@ export default function AdminPage() {
     setQuestionsError(false);
     try {
       const res = await fetch(`${API}/api/questions`, { headers: authHeaders() });
+      if (res.status === 401) {showLoginGate(); return;}
       if (!res.ok) throw new Error();
       setQuestions(await res.json());
     } catch {
@@ -282,9 +283,11 @@ export default function AdminPage() {
             else if (chunk.type === 'sources') setAskSources(chunk.sources || []);
             else if (chunk.type === 'delta') typeQueue += chunk.text;
             else if (chunk.type === 'error') setAskError(chunk.message);
-          } catch { /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
+          } catch {  /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
         }
       }
+    } catch {
+      setAskError('연결이 끊겼습니다. 다시 시도해주세요.');
     } finally {
       // 큐에 남은 글자를 마저 흘려보낸 뒤 타이머를 정리한다
       const drain = setInterval(() => {
