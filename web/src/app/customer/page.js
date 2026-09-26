@@ -5,30 +5,67 @@
 import { useEffect, useRef, useState } from "react";
 import "./customer.css";
 
-// admin.js와 같은 자리 - 프론트(3000)와 백엔드(8000)가 다른 오리진이라 직접 적는다.
-const API = "http://localhost:8000";
+// admin.js와 같은 자리 - 프론트와 백엔드가 다른 오리진이라 직접 적는다.
+// 배포 주소는 Vercel 프로젝트의 NEXT_PUBLIC_API_URL 환경변수로 넣는다 - 코드는 안 건드린다.
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const QUOTA_MAX = 5;
 
+// 상품별 실사진은 없어서(백엔드가 productType을 사료/간식 두 갈래로만 내려줌 - domain/products.py 참고)
+// 카테고리 대표 사진 몇 장을 상품 ID 기준으로 고정 배정한다. 새로고침해도 같은 상품은 항상 같은 사진.
+const PRODUCT_IMAGES = {
+  '사료': ['/products/food-1.jpg', '/products/food-2.jpg', '/products/food-3.jpg'],
+  '간식': ['/products/treat-1.jpg', '/products/treat-2.jpg'],
+};
+function pickProductImage(card) {
+  const pool = PRODUCT_IMAGES[card.productType];
+  if (!pool) return null;
+  let hash = 0;
+  for (const ch of String(card.productId ?? card.key)) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+  return pool[Math.abs(hash) % pool.length];
+}
+
+// 마이페이지 펫 상세 카드용 라벨 - signup 폼 select의 값(1~5, 1~3, M/F)과 동일한 매핑이다.
+const SIZE_LABELS = { 1: '초소형', 2: '소형', 3: '중형', 4: '대형', 5: '초대형' };
+const ACTIVITY_LABELS = { 1: '적음', 2: '보통', 3: '많음' };
+const GENDER_LABELS = { M: '수컷', F: '암컷' };
+function petDetailRows(p) {
+  return [
+    ['종', p.species],
+    ['성별', GENDER_LABELS[p.gender]],
+    ['생일', p.birthDate],
+    ['체중', p.weightKg != null ? `${p.weightKg}kg` : null],
+    ['체구', SIZE_LABELS[p.size]],
+    ['활동량', ACTIVITY_LABELS[p.activityLevel]],
+    ['식성', p.dietNote],
+    ['피부', p.skinNote],
+    ['알레르기', p.allergies],
+  ].filter(([, v]) => v);
+}
+
 // 재구조화안 그대로 보리/나비 두 마리, 카드 3장을 기본값(목업)으로 둔다.
-// 로그인해서 실제 데이터(GET /me/pets, /me/recommend)가 오면 이 값을 통째로 갈아끼운다.
+// 로그인해서 실제 데이터(GET /me/profile, /me/recommend)가 오면 이 값을 통째로 갈아끼운다.
 const DEFAULT_PETS = [
   { name: '보리', species: '강아지', emoji: '🐶' },
   { name: '나비', species: '고양이', emoji: '🐱' },
 ];
 const DEFAULT_CARDS = [
-  { key: 'mock-1', emoji: '🍖', brand: '그레인프리 키친', name: '연어 & 고구마 건식 사료', review: '소형견인데도 알갱이가 작아서 잘 먹어요. 냄새도 안 나고 변 상태도 좋아졌어요.', price: 32900, score: 0.91, productType: null, productId: null, bought: false },
-  { key: 'mock-2', emoji: '🐟', brand: '퓨어펫', name: '화식 트릿 (닭가슴살)', review: '산책 훈련용으로 딱이에요. 크기도 작고 손에 안 묻어서 편해요.', price: 9900, score: 0.88, productType: null, productId: null, bought: false },
-  { key: 'mock-3', emoji: '🥕', brand: '냥이부엌', name: '수제 동결건조 큐브', review: '알레르기 있는 고양이인데 반응 하나도 없었어요. 향도 좋아하네요.', price: 14500, score: 0.85, productType: null, productId: null, bought: false },
+  { key: 'mock-1', emoji: '🍖', brand: '그레인프리 키친', name: '연어 & 고구마 건식 사료', review: '소형견인데도 알갱이가 작아서 잘 먹어요. 냄새도 안 나고 변 상태도 좋아졌어요.', price: 32900, score: 0.91, productType: '사료', productId: null, bought: false },
+  { key: 'mock-2', emoji: '🐟', brand: '퓨어펫', name: '화식 트릿 (닭가슴살)', review: '산책 훈련용으로 딱이에요. 크기도 작고 손에 안 묻어서 편해요.', price: 9900, score: 0.88, productType: '간식', productId: null, bought: false },
+  { key: 'mock-3', emoji: '🥕', brand: '냥이부엌', name: '수제 동결건조 큐브', review: '알레르기 있는 고양이인데 반응 하나도 없었어요. 향도 좋아하네요.', price: 14500, score: 0.85, productType: '간식', productId: null, bought: false },
 ];
 
 export default function CustomerPage() {
   // ---------------- 상태: 화면에 보이는 걸 결정하는 값은 전부 useState로 ----------------
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [profile, setProfile] = useState(null); // { name, email, phone, region } - GET /me/profile
   const [pets, setPets] = useState(DEFAULT_PETS);
+  const [expandedPet, setExpandedPet] = useState(null); // 펫 핀 눌러서 상세 펼친 인덱스, null이면 접힘
   const [purchases, setPurchases] = useState([]);
   const [cards, setCards] = useState(DEFAULT_CARDS);
+  const [cardsLoading, setCardsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('pets');
   const [quotaUsed, setQuotaUsed] = useState(0);
+  const [infoOpen, setInfoOpen] = useState(false); // "어떻게 고르나요?" 안내 모달
 
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -48,23 +85,33 @@ export default function CustomerPage() {
   const [askAnswerVisible, setAskAnswerVisible] = useState(false);
   const [askSources, setAskSources] = useState([]);
 
-  const [photoCredit, setPhotoCredit] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   // ---------------- ref: 화면엔 안 보이지만 값을 들고 있어야 하는 것들 ----------------
   // userToken은 렌더링에 직접 쓰이지 않아서(헤더에만 넣음) state 대신 ref로 둔다 - 바뀌어도 재렌더링 필요 없음
   const userTokenRef = useRef('');
   const cardsSectionRef = useRef(null); // 질문 답변 오면 이 위치로 스크롤
 
-  async function loadMyPets() {
+  // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
+  // (customer_detail() 재사용 - app/api/routes/auth.py 참고).
+  async function loadMyProfile() {
     try {
-      const res = await fetch(`${API}/me/pets`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
       if (res.ok) {
-        const rows = await res.json();
-        setPets(rows.map((p) => ({ name: p.name, species: p.animal_category, emoji: p.animal_category === '고양이' ? '🐱' : '🐶' })));
+        const d = await res.json();
+        setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region });
+        setPets(d.pets.map((p) => ({
+          name: p.name, species: p.animal_category, emoji: p.animal_category === '고양이' ? '🐱' : '🐶',
+          gender: p.gender, birthDate: p.birth_date, weightKg: p.weight_kg,
+          size: p.size, activityLevel: p.activity_level, dietNote: p.diet_note,
+          skinNote: p.skin_note, allergies: p.allergies,
+        })));
+        setPurchases(d.purchases.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
+      } else {
+        setLoadError('내 정보를 불러오지 못했습니다.')
       }
-    } catch { /* 실패해도 화면은 기존 값 그대로 둔다 */ }
+    } catch { setLoadError('내 정보를 불러오지 못했습니다.')}
     loadMyRecommend();
-    loadMyPurchases();
   }
 
   async function loadMyPurchases() {
@@ -73,42 +120,33 @@ export default function CustomerPage() {
       if (res.ok) {
         const rows = await res.json();
         setPurchases(rows.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
+      } else {
+        setLoadError('내 구매목록을 불러오지 못했습니다.');
       }
-    } catch { /* 실패해도 기존 값(빈 목록) 그대로 둔다 */ }
+    } catch { setLoadError('내 구매목록을 불러오지 못했습니다.') }
   }
 
   async function loadMyRecommend() {
+    setCardsLoading(true);
     try {
       const res = await fetch(`${API}/me/recommend`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
-      if (!res.ok) return;
+      if (!res.ok) { setCards([]); setLoadError('추천을 불러오지 못했습니다.'); return; }
       const { found } = await res.json();
-      if (!found || !found.length) return; // 후보가 없으면 기존 목업 카드를 그대로 둔다
-      setCards(found.map((p) => ({
+      setCards(found && found.length ? found.map((p) => ({
         key: p.product_id, emoji: '🐾', brand: p.brand, name: p.name, review: p.review,
         price: p.price_krw, score: p.score, productType: p.product_type || null,
         productId: p.product_id, bought: false,
-      })));
-    } catch { /* 실패해도 기존 목업 카드가 그대로 보인다 */ }
+      })) : []);
+    } catch { 
+      setCards([]);
+      setLoadError('추천을 불러오지 못했습니다.');
+    } finally {
+      setCardsLoading(false);
+    }
   }
 
-  async function loadPageBackground() {
-    const cached = sessionStorage.getItem('pageBg');
-    if (cached) { applyBg(JSON.parse(cached)); return; }
-    try {
-      const res = await fetch(`${API}/background`);
-      if (!res.ok) return; // 실패하면 CSS의 --cream 단색 배경 그대로 둔다
-      const data = await res.json();
-      sessionStorage.setItem('pageBg', JSON.stringify(data));
-      applyBg(data);
-    } catch { /* 서버 연결 안 돼도 배경색 폴백이 있으니 조용히 넘어간다 */ }
-  }
-  function applyBg({ url, credit_name, credit_link }) {
-    // body 스타일은 화면에 보이지만 React가 그려주는 JSX가 아니라서 상태로 안 두고 직접 건드린다
-    document.body.style.backgroundImage = `linear-gradient(rgba(250,246,238,.85), rgba(250,246,238,.85)), url(${url})`;
-    setPhotoCredit({ name: credit_name, link: credit_link });
-  }
-
-  // 페이지 열릴 때 딱 한 번: 로그인 유지 + 배경 사진. 위에서 정의한 함수들을 쓰니 그 아래 자리에 둔다.
+  // 페이지 열릴 때 딱 한 번: 로그인 유지. 배경 사진은 이제 customer.css에 정적으로 박혀있어
+  // (public/customer-bg.png) 따로 fetch할 게 없다.
   useEffect(() => {
     const token = localStorage.getItem('userToken') || '';
     if (token) {
@@ -116,10 +154,8 @@ export default function CustomerPage() {
       // localStorage는 마운트 후에만 읽을 수 있어서 이 setState는 여기서만 가능하다 (의도된 1회성 렌더 추가)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoggedIn(true);
-      loadMyPets();
+      loadMyProfile();
     }
-    loadPageBackground();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------------- 로그인/회원가입 ----------------
@@ -159,7 +195,7 @@ export default function CustomerPage() {
     localStorage.setItem('userToken', access_token);
     setLoginOpen(false);
     setIsLoggedIn(true);
-    loadMyPets();
+    loadMyProfile();
   }
 
   // 알레르겐 목록은 GET /allergens에서 딱 한 번만 받아온다 - 회원가입 모달 열 때마다 다시 안 부른다
@@ -222,7 +258,7 @@ export default function CustomerPage() {
     localStorage.setItem('userToken', access_token);
     setSignupOpen(false);
     setIsLoggedIn(true);
-    loadMyPets();
+    loadMyProfile();
   }
 
   // ---------------- 리뷰 남기기 ----------------
@@ -256,21 +292,22 @@ export default function CustomerPage() {
   // ---------------- 추천 카드: 구매하기 ----------------
   async function handleBuy(card) {
     if (card.bought) return;
-    if (card.productId) {
-      // 로그인 후 실제 추천 카드 - POST /me/purchases로 진짜 purchase 행을 만든다
-      try {
-        const res = await fetch(`${API}/me/purchases`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
-          body: JSON.stringify({ product_id: Number(card.productId) }),
-        });
-        if (!res.ok) return;
-      } catch { return; }
-      loadMyPurchases();
-    } else {
-      // 로그인 전 안내용 목업 카드 - 화면 데모로만 반영한다
-      setPurchases((prev) => [...prev, { name: card.name, reviewed: false }]);
+    if (!isLoggedIn) {
+      // 로그인 안 된 상태 - 목업으로 성공 처리하지 않고 로그인을 유도한다
+      handleLoginClick();
+      return;
     }
+    if (!card.productId) return; // 추천이 아직 안 뜬 자리(실 productId 없음) - 살 게 없다
+    // POST /me/purchases로 진짜 purchase 행을 만든다
+    try {
+      const res = await fetch(`${API}/me/purchases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
+        body: JSON.stringify({ product_id: Number(card.productId) }),
+      });
+      if (!res.ok) return;
+    } catch { return; }
+    loadMyPurchases();
     setCards((prev) => prev.map((c) => (c.key === card.key ? { ...c, bought: true } : c)));
   }
 
@@ -334,23 +371,10 @@ export default function CustomerPage() {
 
   return (
     <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link
-        href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap"
-        rel="stylesheet"
-      />
-      <link
-        rel="stylesheet"
-        as="style"
-        crossOrigin="anonymous"
-        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css"
-      />
-
       <div className="page">
         <header>
           <div className="logo">
-            <div className="logo-mark">🐾</div>
+            <img className="logo-mark" src="/dog-mark.png" alt="" />
             오늘뭐멍냥
           </div>
           <div className="auth-buttons">
@@ -360,45 +384,71 @@ export default function CustomerPage() {
           </div>
         </header>
 
-        <div className="profile-strip">
-          <div className="pill-scroll">
-            {activeTab === 'pets' ? (
-              pets.length === 0
-                ? <span className="empty-msg">등록된 반려동물이 없어요.</span>
-                : pets.map((p, i) => <div className="pet-pill" key={i}><div className="avatar">{p.emoji}</div>{p.name}</div>)
-            ) : (
-              purchases.length === 0
-                ? <span className="empty-msg">아직 구매한 상품이 없어요.</span>
-                : purchases.map((h, i) => (
-                  <div className="purchase-pill" key={i}>
-                    <span>{h.name}</span>
-                    {h.reviewed
-                      ? <span className="p-done">작성 완료</span>
-                      : <button type="button" className="p-review-btn" onClick={() => setReviewIndex(i)}>리뷰 남기기</button>}
-                  </div>
-                ))
+        {/* 마이페이지(우리 아이/구매 이력) - 화면 오른쪽에 붙어있다가 hover하면 펼쳐진다 (customer.css .side-panel 참고) */}
+        <div className="side-panel">
+          <button type="button" className="side-panel-tab">마이페이지</button>
+          <div className="side-panel-body">
+            {profile && (
+              <div className="profile-info">
+                <div className="profile-name">{profile.name}</div>
+                <div className="profile-meta">{profile.email}{profile.phone && ` · ${profile.phone}`}{profile.region && ` · ${profile.region}`}</div>
+              </div>
+            )}
+            <div className="tab-switch">
+              <button type="button" className={activeTab === 'pets' ? 'active' : ''} onClick={() => { setActiveTab('pets'); setReviewIndex(null); }}>우리 아이</button>
+              <button type="button" className={activeTab === 'purchases' ? 'active' : ''} onClick={() => { setActiveTab('purchases'); setReviewIndex(null); }}>구매 이력</button>
+            </div>
+            <div className="pill-scroll">
+              {activeTab === 'pets' ? (
+                pets.length === 0
+                  ? <span className="empty-msg">등록된 반려동물이 없어요.</span>
+                  : pets.map((p, i) => (
+                    <div
+                      className={expandedPet === i ? 'pet-pill active' : 'pet-pill'}
+                      key={i}
+                      onClick={() => setExpandedPet(expandedPet === i ? null : i)}
+                    >
+                      <div className="avatar">{p.emoji}</div>{p.name}
+                    </div>
+                  ))
+              ) : (
+                purchases.length === 0
+                  ? <span className="empty-msg">아직 구매한 상품이 없어요.</span>
+                  : purchases.map((h, i) => (
+                    <div className="purchase-pill" key={i}>
+                      <span>{h.name}</span>
+                      {h.reviewed
+                        ? <span className="p-done">작성 완료</span>
+                        : <button type="button" className="p-review-btn" onClick={() => setReviewIndex(i)}>리뷰 남기기</button>}
+                    </div>
+                  ))
+              )}
+            </div>
+
+            {activeTab === 'pets' && expandedPet !== null && pets[expandedPet] && (
+              <div className="pet-detail">
+                {petDetailRows(pets[expandedPet]).map(([label, value]) => (
+                  <div className="pet-detail-row" key={label}><span>{label}</span><span>{value}</span></div>
+                ))}
+              </div>
+            )}
+
+            {reviewIndex !== null && (
+              <form className="review-panel" onSubmit={(e) => handleReviewSubmit(e, reviewIndex)}>
+                <select name="rating" defaultValue="5">
+                  <option value="5">★★★★★</option>
+                  <option value="4">★★★★</option>
+                  <option value="3">★★★</option>
+                  <option value="2">★★</option>
+                  <option value="1">★</option>
+                </select>
+                <textarea name="body" placeholder={`${purchases[reviewIndex].name} 후기를 남겨주세요`}></textarea>
+                <button type="submit">등록</button>
+                <div className="modal-error">{reviewError}</div>
+              </form>
             )}
           </div>
-          <div className="tab-switch">
-            <button type="button" className={activeTab === 'pets' ? 'active' : ''} onClick={() => { setActiveTab('pets'); setReviewIndex(null); }}>우리 아이</button>
-            <button type="button" className={activeTab === 'purchases' ? 'active' : ''} onClick={() => { setActiveTab('purchases'); setReviewIndex(null); }}>구매 이력</button>
-          </div>
         </div>
-
-        {reviewIndex !== null && (
-          <form className="review-panel" onSubmit={(e) => handleReviewSubmit(e, reviewIndex)}>
-            <select name="rating" defaultValue="5">
-              <option value="5">★★★★★</option>
-              <option value="4">★★★★</option>
-              <option value="3">★★★</option>
-              <option value="2">★★</option>
-              <option value="1">★</option>
-            </select>
-            <textarea name="body" placeholder={`${purchases[reviewIndex].name} 후기를 남겨주세요`}></textarea>
-            <button type="submit">등록</button>
-            <div className="modal-error">{reviewError}</div>
-          </form>
-        )}
 
         <div className="hero">
           <div className="hero-copy">
@@ -406,8 +456,8 @@ export default function CustomerPage() {
             <h1>우리 아이 오늘 한 끼,<br />근거 있는 <span className="hl">후기</span>로 골라요.</h1>
             <p>실제로 산 사람들의 후기에서 찾은 근거만 보여드려요. 축종·체구·알레르기까지 우리 아이 프로필에 맞춰 걸러낸 사료와 간식이에요.</p>
             <div className="hero-actions">
-              <button type="button" className="btn-cta">오늘의 추천 보러가기 →</button>
-              <button type="button" className="link-quiet">어떻게 고르나요?</button>
+              <button type="button" className="btn-cta" onClick={() => cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>오늘의 추천 보러가기 →</button>
+              <button type="button" className="link-quiet" onClick={() => setInfoOpen(true)}>어떻게 고르나요?</button>
             </div>
           </div>
 
@@ -419,7 +469,9 @@ export default function CustomerPage() {
               </div>
               <form className="ai-input-row" onSubmit={handleAskSubmit}>
                 <input type="text" name="question" placeholder="예) 알레르기 없는 소형견 사료 추천해줘" disabled={!isLoggedIn || exhausted} />
-                <button type="submit" disabled={!isLoggedIn || exhausted || asking}>질문</button>
+                <button type="submit" disabled={!isLoggedIn || exhausted || asking}>
+                  {asking ? <span className="spinner dark" /> : '질문'}
+                </button>
               </form>
               <div className={isLoggedIn && exhausted ? 'ai-note upsell' : 'ai-note'}>
                 {!isLoggedIn
@@ -445,22 +497,36 @@ export default function CustomerPage() {
           <span>우리 아이 프로필 기준 · 실제 후기 근거</span>
         </div>
         <div className="cards">
-          {cards.map((c) => (
-            <div className="card" key={c.key}>
-              <div className="card-thumb">{c.emoji}</div>
-              <div className="brand">{c.brand}</div>
-              {c.productType && <span className="badge-type">{c.productType}</span>}
-              <div className="name">{c.name}</div>
-              <div className="review">&quot;{c.review}&quot;</div>
-              <div className="card-foot">
-                <span className="price">{c.price.toLocaleString()}원</span>
-                <span className="badge-score">유사도 {c.score.toFixed(2)}</span>
+          {cardsLoading
+            ? [0, 1, 2].map((i) => <div className="card-skeleton" key={i} />)
+            : cards.map((c) => (
+              <div className="card" key={c.key}>
+                <div className="card-thumb">
+                  {pickProductImage(c) ? <img src={pickProductImage(c)} alt={c.name} /> : c.emoji}
+                </div>
+                <div className="brand">{c.brand}</div>
+                {c.productType && <span className="badge-type">{c.productType}</span>}
+                <div className="name">{c.name}</div>
+                <div className="review">&quot;{c.review}&quot;</div>
+                <div className="card-foot">
+                  <span className="price">{c.price.toLocaleString()}원</span>
+                  <span className="badge-score">유사도 {c.score.toFixed(2)}</span>
+                </div>
+                <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought}>
+                  {c.bought ? '구매 완료 ✓' : '구매하기'}
+                </button>
               </div>
-              <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought}>
-                {c.bought ? '구매 완료 ✓' : '구매하기'}
-              </button>
-            </div>
-          ))}
+            ))}
+        </div>
+      </div>
+
+      <div className="modal-overlay" hidden={!infoOpen}>
+        <div className="modal-box">
+          <h3>어떻게 고르나요?</h3>
+          <p>실제로 산 사람들의 후기에서 찾은 근거만 보여드려요. 축종·체구·알레르기까지 우리 아이 프로필에 맞춰 걸러낸 사료와 간식이에요.</p>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-solid" onClick={() => setInfoOpen(false)}>확인</button>
+          </div>
         </div>
       </div>
 
@@ -473,7 +539,9 @@ export default function CustomerPage() {
             <div className="modal-error">{loginError}</div>
             <div className="modal-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(false)}>취소</button>
-              <button type="submit" className="btn btn-solid" disabled={loginSubmitting}>로그인</button>
+              <button type="submit" className="btn btn-solid" disabled={loginSubmitting}>
+                {loginSubmitting ? <span className="spinner" /> : '로그인'}
+              </button>
             </div>
           </form>
         </div>
@@ -562,19 +630,12 @@ export default function CustomerPage() {
             <div className="modal-error">{signupError}</div>
             <div className="modal-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setSignupOpen(false)}>취소</button>
-              <button type="submit" className="btn btn-solid" disabled={signupSubmitting}>가입하기</button>
+              <button type="submit" className="btn btn-solid" disabled={signupSubmitting}>
+                {signupSubmitting ? <span className="spinner" /> : '가입하기'}
+              </button>
             </div>
           </form>
         </div>
-      </div>
-
-      <div className="photo-credit" hidden={!photoCredit}>
-        {photoCredit && (
-          <>
-            Photo by <a href={`${photoCredit.link}?utm_source=today-mung-nyang&utm_medium=referral`} target="_blank" rel="noopener noreferrer">{photoCredit.name}</a> on{' '}
-            <a href="https://unsplash.com/?utm_source=today-mung-nyang&utm_medium=referral" target="_blank" rel="noopener noreferrer">Unsplash</a>
-          </>
-        )}
       </div>
     </>
   );

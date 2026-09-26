@@ -205,16 +205,14 @@ async function loadMyPets(){
 // 구매 이력 탭(.purchase-pill)을 실제 DB의 구매 내역으로 채운다 (GET /me/purchases)
 async function loadMyPurchases(){
   try {
-    const res = await fetch(`${API}/me/purchases`, { headers: { Authorization: `Bearer ${userToken}` } });
-    if (!res.ok) return;
+    const res = await fetch(`${API}/me/purchase`, {headers: {Authorization:`Bearer ${userTokenRef.current}`}});
+    if(!res.ok) {setPurchases([]); return; } // 실패하면 목록을 빈 상태로 확실히 비운다
     const rows = await res.json();
-    purchases = rows.map((p) => ({
-      purchase_id: p.purchase_id,
-      name: p.product_name,
-      reviewed: p.rating != null,
-    }));
-    if (activeTab === 'purchases') renderPillScroll();
-  } catch { /* 실패해도 기존 값(빈 목록) 그대로 둔다 */ }
+    setPurchases(rows.map((p)=>({purchase_id: p.purchase_id, name: p.product_name, reviewed:p.rating != null})));
+  } 
+  catch {
+     setPurchases() // 네트워크 에러도 마찬가지로 비운다
+  }
 }
 
 // "오늘의 추천"(.cards) 목업을 로그인 직후 가입 설문 기준 추천(GET /me/recommend)으로 갈아끼운다
