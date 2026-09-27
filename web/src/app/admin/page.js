@@ -249,8 +249,11 @@ export default function AdminPage() {
     const typeTimer = setInterval(() => {
       if (myGen !== askGenRef.current) { clearInterval(typeTimer); return; }
       if (!typeQueue) return;
-      setAskAnswer((prev) => prev + typeQueue[0]);
+      // 글자를 먼저 꺼내 둔다 - 업데이터 안에서 typeQueue를 읽으면 React가 나중에(개발 모드에선 두 번) 실행해
+      // 이미 잘린 큐를 읽는다. 첫 글자가 빠지고 빈 큐에서 'undefined'가 붙던 원인
+      const ch = typeQueue[0];
       typeQueue = typeQueue.slice(1);
+      setAskAnswer((prev) => prev + ch);
     }, 20);
 
     const petId = (selectedCustomer.pets || [])[0]?.pet_id ?? null;
