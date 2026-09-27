@@ -48,7 +48,7 @@ export default function AdminPage() {
     간식: { key: "purchased_at", dir: "desc" },
   });
 
-  const [view, setView] = useState('members'); // members | verify | questions | system
+  const [view, setView] = useState('members'); // members | questions | system
 
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [aiTab, setAiTab] = useState('recs'); // recs | strategy | ask
@@ -249,8 +249,11 @@ export default function AdminPage() {
     const typeTimer = setInterval(() => {
       if (myGen !== askGenRef.current) { clearInterval(typeTimer); return; }
       if (!typeQueue) return;
-      setAskAnswer((prev) => prev + typeQueue[0]);
+      // 글자를 먼저 꺼내 둔다 - 업데이터 안에서 typeQueue를 읽으면 React가 나중에(개발 모드에선 두 번) 실행해
+      // 이미 잘린 큐를 읽는다. 첫 글자가 빠지고 빈 큐에서 'undefined'가 붙던 원인
+      const ch = typeQueue[0];
       typeQueue = typeQueue.slice(1);
+      setAskAnswer((prev) => prev + ch);
     }, 20);
 
     const petId = (selectedCustomer.pets || [])[0]?.pet_id ?? null;
@@ -419,7 +422,6 @@ export default function AdminPage() {
             <div className="topbar-title">고객 관리</div>
             <div className="view-switch">
               <button className={view === 'members' ? 'view-btn active' : 'view-btn'} onClick={() => setView('members')}>회원</button>
-              <button className={view === 'verify' ? 'view-btn active' : 'view-btn'} onClick={() => setView('verify')}>검증</button>
               <button className={view === 'questions' ? 'view-btn active' : 'view-btn'} onClick={() => setView('questions')}>질문</button>
               <button className={view === 'system' ? 'view-btn active' : 'view-btn'} onClick={() => setView('system')}>시스템</button>
             </div>
@@ -504,11 +506,6 @@ export default function AdminPage() {
                 {renderPurchaseTable('간식')}
               </>
             )}
-          </div>
-
-          <div className="full-view" hidden={view !== 'verify'}>
-            <div className="section-title">임베딩 검증 결과</div>
-            <p style={{ fontSize: '13px', color: 'var(--muted)' }}>준비 중입니다. tests/eval/ 에 pytest 기반 검증이 붙으면 이 자리에 결과가 표시됩니다 (TODO.md 참고).</p>
           </div>
 
           <div className="full-view" hidden={view !== 'questions'}>
