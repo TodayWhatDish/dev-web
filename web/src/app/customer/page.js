@@ -100,11 +100,34 @@ export default function CustomerPage() {
   const userTokenRef = useRef('');
   const cardsSectionRef = useRef(null); // 질문 답변 오면 이 위치로 스크롤
 
+  // 로그아웃 = 로그인 전 화면으로 되돌리기. 토큰만 지우면 이전 회원의 프로필·구매이력·답변이 화면에 남는다.
+  // 버튼 로그아웃과 /me/* 401(토큰 만료) 둘 다 여기로 온다.
+  function logout() {
+    userTokenRef.current = '';
+    localStorage.removeItem('userToken');
+    setIsLoggedIn(false);
+    setProfile(null);
+    setPets(DEFAULT_PETS);
+    setExpandedPet(null);
+    setPurchases([]);
+    setCards(DEFAULT_CARDS);
+    setCardsLoading(false);
+    setActiveTab('pets');
+    setQuotaUsed(0);
+    setReviewIndex(null);
+    setReviewError('');
+    setAskAnswer('');
+    setAskAnswerVisible(false);
+    setAskSources([]);
+    setLoadError('');
+  }
+
   // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
   // (customer_detail() 재사용 - app/api/routes/auth.py 참고).
   async function loadMyProfile() {
     try {
       const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (res.ok) {
         const d = await res.json();
         setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region });
@@ -125,6 +148,7 @@ export default function CustomerPage() {
   async function loadMyPurchases() {
     try {
       const res = await fetch(`${API}/me/purchases`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (res.ok) {
         const rows = await res.json();
         setPurchases(rows.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
@@ -138,6 +162,7 @@ export default function CustomerPage() {
     setCardsLoading(true);
     try {
       const res = await fetch(`${API}/me/recommend`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (!res.ok) { setCards([]); setLoadError('추천을 불러오지 못했습니다.'); return; }
       const { found } = await res.json();
       setCards(found && found.length ? found.map((p) => ({
@@ -169,9 +194,7 @@ export default function CustomerPage() {
   // ---------------- 로그인/회원가입 ----------------
   function handleLoginClick() {
     if (isLoggedIn) {
-      userTokenRef.current = '';
-      localStorage.removeItem('userToken');
-      setIsLoggedIn(false);
+      logout();
       return;
     }
     setLoginError('');
@@ -288,6 +311,7 @@ export default function CustomerPage() {
       setReviewError('서버에 연결할 수 없습니다.');
       return;
     }
+    if (res.status === 401) { logout(); return; }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       setReviewError(err.detail || '리뷰 등록에 실패했습니다.');
@@ -313,6 +337,7 @@ export default function CustomerPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
         body: JSON.stringify({ product_id: Number(card.productId) }),
       });
+      if (res.status === 401) { logout(); return; }
       if (!res.ok) return;
     } catch { return; }
     loadMyPurchases();
@@ -344,7 +369,12 @@ export default function CustomerPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
         body: JSON.stringify({ user_query: question }),
       });
-      if (res.status === 401) { setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.'); return; }
+      if (res.status === 401) {
+        logout();
+        setAskAnswerVisible(true);
+        setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.');
+        return;
+      }
       if (!res.ok) { setAskAnswer(await errorDetail(res, '질문을 처리하지 못했습니다.')); return; }
       if (!res.body) { setAskAnswer('응답을 받지 못했습니다.'); return; }
 

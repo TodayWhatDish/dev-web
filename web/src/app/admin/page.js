@@ -90,6 +90,9 @@ export default function AdminPage() {
     localStorage.removeItem('adminToken');
     setIsLoggedIn(false);
     setSelectedCustomer(null);
+    // 다음 로그인 전까지 이전 세션의 고객 목록·AI 패널이 남아 보이지 않게 비운다
+    setAiPanelOpen(false);
+    setCustomers([]);
   };
 
   async function getCustomers() {
