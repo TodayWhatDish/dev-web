@@ -8,6 +8,14 @@ import "./admin.css";
 // customer/page.js와 같은 자리 - 배포 주소는 Vercel의 NEXT_PUBLIC_API_URL 환경변수로 넣는다.
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
+async function errorDetail(res, fallback) {
+  const err = await res.json().catch(() => ({}));
+  if (typeof err.detail === 'string') return err.detail;
+  if (Array.isArray(err.detail)) return err.detail.map((d) => d.msg).join(', ') || fallback;
+  return fallback;
+}
+
 // ---- admin.js의 라벨 헬퍼 그대로 ----
 const petEmoji = (species) => (species === "개" ? "🐶" : species === "고양이" ? "🐱" : "🐾");
 const speciesLabel = (species) => (species === "개" ? "강아지" : species);
@@ -262,6 +270,7 @@ export default function AdminPage() {
         body: JSON.stringify({ user_query: question, pet_id: petId, user_id: selectedCustomer.user_id }),
       });
       if (res.status === 401) { showLoginGate(); return; }
+      if (!res.ok) { setAskError(await errorDetail(res, '질문을 처리하지 못했습니다.')); return; }
       if (!res.body) { setAskError('응답을 받지 못했습니다.'); return; }
 
       const reader = res.body.getReader();

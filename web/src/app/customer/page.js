@@ -10,6 +10,14 @@ import "./customer.css";
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const QUOTA_MAX = 5;
 
+// !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
+async function errorDetail(res, fallback) {
+  const err = await res.json().catch(() => ({}));
+  if (typeof err.detail === 'string') return err.detail;
+  if (Array.isArray(err.detail)) return err.detail.map((d) => d.msg).join(', ') || fallback;
+  return fallback;
+}
+
 // 상품별 실사진은 없어서(백엔드가 productType을 사료/간식 두 갈래로만 내려줌 - domain/products.py 참고)
 // 카테고리 대표 사진 몇 장을 상품 ID 기준으로 고정 배정한다. 새로고침해도 같은 상품은 항상 같은 사진.
 const PRODUCT_IMAGES = {
@@ -337,6 +345,7 @@ export default function CustomerPage() {
         body: JSON.stringify({ user_query: question }),
       });
       if (res.status === 401) { setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.'); return; }
+      if (!res.ok) { setAskAnswer(await errorDetail(res, '질문을 처리하지 못했습니다.')); return; }
       if (!res.body) { setAskAnswer('응답을 받지 못했습니다.'); return; }
 
       // NDJSON을 줄 단위로 읽는다 - 네트워크 조각이 줄 한가운데를 자를 수 있어 buffer가 꼭 필요하다
