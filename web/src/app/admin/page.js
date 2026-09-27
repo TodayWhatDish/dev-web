@@ -510,7 +510,7 @@ export default function AdminPage() {
 
           <div className="full-view" hidden={view !== 'questions'}>
             <div className="section-title">고객 질문 기록</div>
-            <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '12px' }}>customer 페이지 AI 질문(/ask/me)과 관리자 AI 분석 질문(/ask)이 여기 쌓인다 - 검색 후보(사료/간식)와 실제 답변을 대조해볼 수 있다.</p>
+            <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '12px' }}>customer 페이지 AI 질문(/ask/me)이 여기 쌓인다 (관리자 AI 분석 질문은 남기지 않는다) - 검색 후보(사료/간식)와 실제 답변을 대조해볼 수 있다.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {questionsLoading ? (
                 <div className="ai-loading" style={{ height: 'auto', padding: '10px 0' }}><div className="spinner"></div>불러오는 중...</div>
