@@ -225,26 +225,33 @@ export default function AdminPage() {
 
   // 이 고객이 실제로 남긴 최근 리뷰를 근거로 한 추천. 질문 없이도 패널을 열면 항상 뜬다
   async function loadHistoryBasedRecs(userId) {
-    const res = await fetch(`${API}/api/customers/${userId}/similar-reviews`, { headers: authHeaders() });
-    if (res.status === 401) { showLoginGate(); return; }
-    setHistoryRecs(await res.json());
+    try {
+      const res = await fetch(`${API}/api/customers/${userId}/similar-reviews`, { headers: authHeaders() });
+      if (res.status === 401) { showLoginGate(); return; }
+      // 실패 응답엔 found가 없다 - 그대로 넣으면 렌더에서 found.length로 죽는다
+      if (!res.ok) { setHistoryRecs({ found: [], error: await errorDetail(res, '이력 기반 추천을 불러오지 못했습니다.') }); return; }
+      setHistoryRecs(await res.json());
+    } catch {
+      setHistoryRecs({ found: [], error: '서버에 연결할 수 없습니다.' });
+    }
   }
 
   // 판매전략/CS 응대안 생성. LLM 호출 비용이 있어 버튼으로 트리거한다.
   async function loadStrategy() {
     setStrategyLoading(true);
-    const res = await fetch(`${API}/api/customers/${selectedCustomer.user_id}/strategy`, {
-      method: 'POST',
-      headers: authHeaders(),
-    });
-    setStrategyLoading(false);
-    if (res.status === 401) { showLoginGate(); return; }
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setStrategyResult({ error: err.detail ?? '생성 실패' });
-      return;
+    try {
+      const res = await fetch(`${API}/api/customers/${selectedCustomer.user_id}/strategy`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (res.status === 401) { showLoginGate(); return; }
+      if (!res.ok) { setStrategyResult({ error: await errorDetail(res, '생성 실패') }); return; }
+      setStrategyResult(await res.json());
+    } catch {
+      setStrategyResult({ error: '서버에 연결할 수 없습니다.' });
+    } finally {
+      setStrategyLoading(false); // 네트워크 오류에도 스피너가 남지 않게
     }
-    setStrategyResult(await res.json());
   }
 
   // 선택된 고객의 첫 번째 펫 프로필로 /ask를 스트리밍 호출. NDJSON을 줄 단위로 읽는다.
@@ -578,6 +585,8 @@ export default function AdminPage() {
           <div hidden={aiTab !== 'recs'}>
             {historyRecs === null ? (
               <div className="ai-loading" style={{ height: 'auto', padding: '10px 0' }}><div className="spinner"></div>구매 이력 확인 중...</div>
+            ) : historyRecs.error ? (
+              <p style={{ fontSize: '13px', color: '#c0392b' }}>{historyRecs.error}</p>
             ) : historyRecs.found.length === 0 ? (
               <p style={{ fontSize: '13px', color: 'var(--muted)' }}>참고할 구매 후기가 없어 이력 기반 추천을 만들 수 없습니다.</p>
             ) : (
