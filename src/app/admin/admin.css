@@ -175,3 +175,24 @@ table.purchases th.sortable:hover { color: var(--accent); }
 .ai-loading { display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 13.5px; }
 .spinner { width: 22px; height: 22px; border: 2.5px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* 회원 추가/수정/탈퇴 - 모달은 네이티브 <dialog> (ESC·포커스 가두기 공짜) */
+.sidebar-label { display: flex; align-items: center; justify-content: space-between; }
+.member-add-btn { border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.member-add-btn:hover { background: var(--accent-soft); }
+.member-action { margin-left: 8px; vertical-align: middle; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 6px; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+.member-action:hover { border-color: var(--accent); color: var(--accent); }
+.member-action.danger:hover { border-color: #c0392b; color: #c0392b; }
+.member-dialog { width: min(640px, 92vw); border: none; border-radius: 16px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,.2); margin: auto; }
+.member-dialog::backdrop { background: rgba(20, 30, 25, .35); }
+.member-dialog h3 { font-size: 17px; margin-bottom: 14px; }
+.member-dialog h4 { font-size: 13px; color: var(--muted); margin: 18px 0 8px; }
+.member-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 14px; }
+.member-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.member-grid input, .member-grid select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; color: var(--ink); background: #fff; }
+.member-grid input:focus, .member-grid select:focus { outline: none; border-color: var(--accent); }
+.member-allergies { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 13px; }
+.member-allergies label { display: flex; align-items: center; gap: 4px; }
+.member-note { font-size: 13px; color: var(--muted); margin-top: 14px; }
+.member-error { color: #c0392b; font-size: 13px; min-height: 18px; margin-top: 12px; }
+.member-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
