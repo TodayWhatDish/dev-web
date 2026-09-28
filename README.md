@@ -59,13 +59,11 @@ flowchart LR
 ## 프로젝트 구조
 
 ```
-web/                    Next.js 앱
-  src/app/
-    (site)/             소개 사이트 — 홈 · 서비스 · 소개 · 문의
-    customer/           고객 페이지
-    admin/              관리자 대시보드
-  public/               이미지 · 폰트
-frontend/               구버전 정적 HTML/JS (삭제 예정)
+src/app/
+  (site)/               소개 사이트 — 홈 · 서비스 · 소개 · 문의
+  customer/             고객 페이지
+  admin/                관리자 대시보드
+public/                 이미지 · 폰트
 docs/                   디자인 기준 · 리팩터링 체크리스트
 ```
 
@@ -74,7 +72,6 @@ docs/                   디자인 기준 · 리팩터링 체크리스트
 Node.js 22+와, `:8000`에서 실행 중인 [dev-data-embed](https://github.com/TodayWhatDish/dev-data-embed)가 필요합니다.
 
 ```bash
-cd web
 npm install
 npm run dev            # http://localhost:3000
 ```
