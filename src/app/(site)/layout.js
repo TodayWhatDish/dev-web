@@ -1,5 +1,5 @@
 import Link from "next/link";
-import credits from "@/public/pets/CREDITS.json";
+import credits from "../../../public/pets/CREDITS.json";
 import "./site.css";
 
 export const metadata = {
