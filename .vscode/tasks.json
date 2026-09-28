@@ -4,7 +4,7 @@
     "tasks": [
         {
             "label": "🌐 프론트 개발 서버 (3000)",
-            "detail": "web/ 의 Next.js 개발 서버를 띄운다(localhost:3000). 처음이면 web/ 에서 npm install 을 먼저 한다.",
+            "detail": "Next.js 개발 서버를 띄운다(localhost:3000). 처음이면 npm install 을 먼저 한다.",
             "type": "shell",
             "command": "npm",
             "args": [
@@ -12,7 +12,7 @@
                 "dev"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/web"
+                "cwd": "${workspaceFolder}"
             },
             "dependsOn": [
                 "🛑 포트 3000 죽이기"
