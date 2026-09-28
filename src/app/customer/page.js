@@ -53,7 +53,9 @@ const DEFAULT_CARDS = [
 // /me/recommend의 found와 /ask/me의 sources는 같은 candidates() 결과라 한 함수로 카드로 바꾼다
 function toCard(p) {
   return {
-    key: p.product_id, emoji: '🐾', brand: p.brand, name: p.name, review: p.review,
+    key: p.product_id, emoji: '🐾', brand: p.brand, name: p.name,
+    // 검색용 청크는 '상품명 (목적) 주원료: … 별점 N점 후기: 본문' 모양이라 화면엔 후기 본문만
+    review: String(p.review ?? '').split('후기:').pop().trim(),
     price: p.price_krw, score: p.score, productType: p.product_type || null,
     productId: p.product_id, bought: false,
   };
@@ -108,6 +110,7 @@ export default function CustomerPage() {
   // ---------------- ref: 화면엔 안 보이지만 값을 들고 있어야 하는 것들 ----------------
   // userToken은 렌더링에 직접 쓰이지 않아서(헤더에만 넣음) state 대신 ref로 둔다 - 바뀌어도 재렌더링 필요 없음
   const userTokenRef = useRef('');
+  const [recoOpen, setRecoOpen] = useState(false); // 추천 결과 모달 - 추천이 새로 오면 열린다
   const cardsSectionRef = useRef(null); // 질문 답변 오면 이 위치로 스크롤
 
   // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
@@ -152,6 +155,7 @@ export default function CustomerPage() {
       const { found, query } = await res.json();
       setCards((found || []).map(toCard));
       setRecoBasis({ query });
+      if (found?.length) setRecoOpen(true);
     } catch { 
       setCards([]);
       setLoadError('추천을 불러오지 못했습니다.');
@@ -400,6 +404,7 @@ export default function CustomerPage() {
               setAskSources(chunk.sources || []);
               setCards((chunk.sources || []).map(toCard));
               setRecoBasis({ question });
+              if (chunk.sources?.length) setRecoOpen(true);
             }
             else if (chunk.type === 'error') setAskAnswer(chunk.message);
           } catch { /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
@@ -500,7 +505,7 @@ export default function CustomerPage() {
             <h1>우리 아이 오늘 한 끼,<br />근거 있는 <span className="hl">후기</span>로 골라요.</h1>
             <p>실제로 산 사람들의 후기에서 찾은 근거만 보여드려요. 축종·체구·알레르기까지 우리 아이 프로필에 맞춰 걸러낸 사료와 간식이에요.</p>
             <div className="hero-actions">
-              <button type="button" className="btn-cta" onClick={() => cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>오늘의 추천 보러가기 →</button>
+              <button type="button" className="btn-cta" onClick={() => (isLoggedIn && cards.length ? setRecoOpen(true) : cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }))}>오늘의 추천 보러가기 →</button>
               <button type="button" className="link-quiet" onClick={() => setInfoOpen(true)}>어떻게 고르나요?</button>
             </div>
           </div>
@@ -589,6 +594,45 @@ export default function CustomerPage() {
                 </button>
               </div>
             ))}
+        </div>
+      </div>
+
+      <div className="modal-overlay" hidden={!recoOpen} onClick={(e) => e.target === e.currentTarget && setRecoOpen(false)}>
+        <div className="modal-box reco-modal">
+          <div className="reco-modal-head">
+            <span className="reco-modal-kicker">{recoBasis?.question ? 'AI 답변 근거 상품' : '오늘의 추천'}</span>
+            <h3>{recoBasis?.question ? `“${recoBasis.question}”` : `${pets[0]?.name ?? '우리 아이'}를 위한 추천 ${Math.min(cards.length, 3)}가지`}</h3>
+            {!recoBasis?.question && basisChips(pets[0], recoBasis?.query).length > 0 && (
+              <div className="reco-modal-chips">
+                {basisChips(pets[0], recoBasis?.query).map((c) => <span className="chip" key={c}>{c}</span>)}
+              </div>
+            )}
+          </div>
+          <ol className="reco-list">
+            {cards.slice(0, 3).map((c, i) => (
+              <li className="reco-item" key={c.key}>
+                <span className="reco-rank">{i + 1}</span>
+                <div className="reco-thumb">
+                  {pickProductImage(c) ? <img src={pickProductImage(c)} alt={c.name} /> : c.emoji}
+                </div>
+                <div className="reco-body">
+                  <div className="reco-name"><span className="brand">{c.brand}</span> {c.name}</div>
+                  <p className="reco-review">&quot;{c.review}&quot;</p>
+                  <div className="reco-meta">
+                    <span className="price">{c.price.toLocaleString()}원</span>
+                    <span className="reco-match"><i style={{ width: `${Math.round(c.score * 100)}%` }} />매칭 {Math.round(c.score * 100)}%</span>
+                  </div>
+                </div>
+                <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought}>
+                  {c.bought ? '구매 완료 ✓' : '구매하기'}
+                </button>
+              </li>
+            ))}
+          </ol>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => { setRecoOpen(false); cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>전체 추천 보기</button>
+            <button type="button" className="btn btn-solid" onClick={() => setRecoOpen(false)}>닫기</button>
+          </div>
         </div>
       </div>
 
