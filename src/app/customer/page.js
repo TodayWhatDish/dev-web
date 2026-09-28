@@ -10,6 +10,14 @@ import "./customer.css";
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const QUOTA_MAX = 5;
 
+// !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
+async function errorDetail(res, fallback) {
+  const err = await res.json().catch(() => ({}));
+  if (typeof err.detail === 'string') return err.detail;
+  if (Array.isArray(err.detail)) return err.detail.map((d) => d.msg).join(', ') || fallback;
+  return fallback;
+}
+
 // 상품별 실사진은 없어서(백엔드가 productType을 사료/간식 두 갈래로만 내려줌 - domain/products.py 참고)
 // 카테고리 대표 사진 몇 장을 상품 ID 기준으로 고정 배정한다. 새로고침해도 같은 상품은 항상 같은 사진.
 const PRODUCT_IMAGES = {
@@ -113,11 +121,35 @@ export default function CustomerPage() {
   const [recoOpen, setRecoOpen] = useState(false); // 추천 결과 모달 - 추천이 새로 오면 열린다
   const cardsSectionRef = useRef(null); // 질문 답변 오면 이 위치로 스크롤
 
+  // 로그아웃 = 로그인 전 화면으로 되돌리기. 토큰만 지우면 이전 회원의 프로필·구매이력·답변이 화면에 남는다.
+  // 버튼 로그아웃과 /me/* 401(토큰 만료) 둘 다 여기로 온다.
+  function logout() {
+    userTokenRef.current = '';
+    localStorage.removeItem('userToken');
+    setIsLoggedIn(false);
+    setProfile(null);
+    setPets([]);
+    setExpandedPet(null);
+    setPurchases([]);
+    setCards(DEFAULT_CARDS);
+    setRecoBasis(null);
+    setCardsLoading(false);
+    setActiveTab('pets');
+    setQuotaUsed(0);
+    setReviewIndex(null);
+    setReviewError('');
+    setAskAnswer('');
+    setAskAnswerVisible(false);
+    setAskSources([]);
+    setLoadError('');
+  }
+
   // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
   // (customer_detail() 재사용 - app/api/routes/auth.py 참고).
   async function loadMyProfile() {
     try {
       const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (res.ok) {
         const d = await res.json();
         setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region });
@@ -138,6 +170,7 @@ export default function CustomerPage() {
   async function loadMyPurchases() {
     try {
       const res = await fetch(`${API}/me/purchases`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (res.ok) {
         const rows = await res.json();
         setPurchases(rows.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
@@ -151,6 +184,7 @@ export default function CustomerPage() {
     setCardsLoading(true);
     try {
       const res = await fetch(`${API}/me/recommend`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (!res.ok) { setCards([]); setLoadError('추천을 불러오지 못했습니다.'); return; }
       const { found, query } = await res.json();
       setCards((found || []).map(toCard));
@@ -184,12 +218,7 @@ export default function CustomerPage() {
   // ---------------- 로그인/회원가입 ----------------
   function handleLoginClick() {
     if (isLoggedIn) {
-      userTokenRef.current = '';
-      localStorage.removeItem('userToken');
-      setIsLoggedIn(false);
-      setProfile(null); setPets([]); setPurchases([]);
-      setCards(DEFAULT_CARDS); setRecoBasis(null);
-      setAskAnswerVisible(false); setAskSources([]);
+      logout();
       return;
     }
     setLoginError('');
@@ -324,6 +353,7 @@ export default function CustomerPage() {
       setReviewError('서버에 연결할 수 없습니다.');
       return;
     }
+    if (res.status === 401) { logout(); return; }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       setReviewError(err.detail || '리뷰 등록에 실패했습니다.');
@@ -349,6 +379,7 @@ export default function CustomerPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
         body: JSON.stringify({ product_id: Number(card.productId) }),
       });
+      if (res.status === 401) { logout(); return; }
       if (!res.ok) return;
     } catch { return; }
     loadMyPurchases();
@@ -380,7 +411,13 @@ export default function CustomerPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
         body: JSON.stringify({ user_query: question }),
       });
-      if (res.status === 401) { setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.'); return; }
+      if (res.status === 401) {
+        logout();
+        setAskAnswerVisible(true);
+        setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.');
+        return;
+      }
+      if (!res.ok) { setAskAnswer(await errorDetail(res, '질문을 처리하지 못했습니다.')); return; }
       if (!res.body) { setAskAnswer('응답을 받지 못했습니다.'); return; }
 
       // NDJSON을 줄 단위로 읽는다 - 네트워크 조각이 줄 한가운데를 자를 수 있어 buffer가 꼭 필요하다

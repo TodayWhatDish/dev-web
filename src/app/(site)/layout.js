@@ -1,4 +1,5 @@
 import Link from "next/link";
+import credits from "../../../public/pets/CREDITS.json";
 import "./site.css";
 
 export const metadata = {
@@ -50,6 +51,19 @@ export default function SiteLayout({ children }) {
         <p style={{ marginTop: 24 }}>
           개와 고양이를 위한 사료·간식 추천 서비스입니다. 현재 준비 중이며, 화면에 보이는 후기와 추천 예시는
           모두 샘플 데이터로 만든 것입니다.
+        </p>
+        {/* CC BY / BY-SA 사진은 저작자·출처·라이선스 표기가 이용 조건이다. 목록은 CREDITS.json 한 곳에서만 관리한다 */}
+        <p className="foot-credits" style={{ marginTop: 12, fontSize: 12, opacity: 0.8 }}>
+          사진:{" "}
+          {Object.entries(credits).map(([file, c], i) => (
+            <span key={file}>
+              {i > 0 && " · "}
+              <a href={c.src} target="_blank" rel="noopener noreferrer">{c.title}</a> by {c.creator},{" "}
+              <a href={c.license_url} target="_blank" rel="noopener noreferrer license">
+                CC {c.license.toUpperCase()} {c.license_url.match(/\/(\d\.\d)\//)?.[1]}
+              </a>
+            </span>
+          ))}
         </p>
       </footer>
     </div>
