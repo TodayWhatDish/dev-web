@@ -20,6 +20,7 @@ export default function SiteLayout({ children }) {
           <Link href="/service">서비스</Link>
           <Link href="/about">소개</Link>
           <Link href="/contact">문의</Link>
+          <Link href="/customer?login=1" className="nav-login">로그인</Link>
         </nav>
       </header>
 
