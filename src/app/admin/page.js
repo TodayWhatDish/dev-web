@@ -56,7 +56,7 @@ export default function AdminPage() {
     간식: { key: "purchased_at", dir: "desc" },
   });
 
-  const [view, setView] = useState('members'); // members | verify | questions | system
+  const [view, setView] = useState('members'); // members | questions | system
 
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [aiTab, setAiTab] = useState('recs'); // recs | strategy | ask
@@ -75,6 +75,12 @@ export default function AdminPage() {
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const [questionsError, setQuestionsError] = useState(false);
   const [systemStatus, setSystemStatus] = useState({ db: null, api: null });
+
+  // 회원 추가/수정 폼: null = 닫힘, 'add' | 'edit'
+  const [memberForm, setMemberForm] = useState(null);
+  const [memberError, setMemberError] = useState('');
+  const [allergenOptions, setAllergenOptions] = useState([]);
+  const memberDialogRef = useRef(null);
 
   const adminTokenRef = useRef('');
   // askQuestion()이 겹쳐 호출돼도 오래된 스트림이 화면에 못 쓰게 막는 세대 번호
@@ -204,6 +210,79 @@ export default function AdminPage() {
     } catch { /* 401은 showLoginGate가 처리 */ }
   }
 
+  // ---- 회원 추가/수정/탈퇴: POST·PATCH·DELETE /api/customers ----
+  async function openMemberForm(mode) {
+    setMemberError('');
+    setMemberForm(mode);
+    memberDialogRef.current?.showModal();
+    if (allergenOptions.length) return;
+    try {
+      const res = await fetch(`${API}/allergens`);
+      if (res.ok) setAllergenOptions(await res.json());
+    } catch { /* 목록 없이도 나머지 칸은 저장할 수 있다 */ }
+  }
+  function closeMemberForm() {
+    memberDialogRef.current?.close();
+    setMemberForm(null);
+  }
+
+  async function handleMemberSubmit(e) {
+    e.preventDefault();
+    setMemberError('');
+    const fd = new FormData(e.currentTarget);
+    const str = (k) => String(fd.get(k) ?? '').trim() || null;
+    const num = (k) => (str(k) == null ? null : Number(str(k)));
+    const isAdd = memberForm === 'add';
+    // 빈 칸은 null로 보낸다 - 수정 때 칸을 비우면 값이 지워지는 게 맞다
+    const body = {
+      name: str('name'), email: str('email'), phone: str('phone'), region: str('region'),
+      pet_name: str('pet_name'), pet_gender: str('pet_gender'), pet_birth_date: str('pet_birth_date'),
+      pet_weight_kg: num('pet_weight_kg'), pet_size: num('pet_size'), pet_activity_level: num('pet_activity_level'),
+      pet_allergies: fd.getAll('pet_allergies'), diet_note: str('diet_note'), skin_note: str('skin_note'),
+    };
+    if (isAdd) {
+      Object.assign(body, { password: str('password'), pet_species: str('pet_species') });
+    } else if (firstPet) {
+      Object.assign(body, { pet_id: firstPet.pet_id, pet_neutered: num('pet_neutered') });
+    } else {
+      // 펫이 없는 회원은 계정 칸만 고칠 수 있다 (PATCH가 pet_id 없이 펫 칸을 받으면 422)
+      Object.keys(body).filter((k) => k.startsWith('pet_') || k.endsWith('_note')).forEach((k) => delete body[k]);
+    }
+
+    const url = isAdd ? `${API}/api/customers` : `${API}/api/customers/${selectedCustomer.user_id}`;
+    let res;
+    try {
+      res = await fetch(url, {
+        method: isAdd ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(body),
+      });
+    } catch { setMemberError('서버에 연결할 수 없습니다.'); return; }
+    if (res.status === 401) { closeMemberForm(); showLoginGate(); return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      // 422는 detail이 배열(필드별 오류)로 온다
+      setMemberError(Array.isArray(err.detail) ? err.detail.map((d) => d.msg).join(', ') : err.detail || '저장에 실패했습니다.');
+      return;
+    }
+    setSelectedCustomer(await res.json());
+    closeMemberForm();
+    loadCustomers();
+  }
+
+  async function withdrawMember() {
+    if (!window.confirm(`${selectedCustomer.name} 회원을 탈퇴 처리할까요?\n구매 이력은 남고, 목록과 로그인에서만 빠집니다.`)) return;
+    const res = await fetch(`${API}/api/customers/${selectedCustomer.user_id}`, { method: 'DELETE', headers: authHeaders() });
+    if (res.status === 401) { showLoginGate(); return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      window.alert(err.detail || '탈퇴 처리에 실패했습니다.');
+      return;
+    }
+    setSelectedCustomer(null);
+    loadCustomers();
+  }
+
   function sortPurchases(type, key) {
     setPurchaseSort((prev) => {
       const cur = prev[type];
@@ -266,8 +345,11 @@ export default function AdminPage() {
     const typeTimer = setInterval(() => {
       if (myGen !== askGenRef.current) { clearInterval(typeTimer); return; }
       if (!typeQueue) return;
-      setAskAnswer((prev) => prev + typeQueue[0]);
+      // 글자를 먼저 꺼내 둔다 - 업데이터 안에서 typeQueue를 읽으면 React가 나중에(개발 모드에선 두 번) 실행해
+      // 이미 잘린 큐를 읽는다. 첫 글자가 빠지고 빈 큐에서 'undefined'가 붙던 원인
+      const ch = typeQueue[0];
       typeQueue = typeQueue.slice(1);
+      setAskAnswer((prev) => prev + ch);
     }, 20);
 
     const petId = (selectedCustomer.pets || [])[0]?.pet_id ?? null;
@@ -436,7 +518,6 @@ export default function AdminPage() {
             <div className="topbar-title">고객 관리</div>
             <div className="view-switch">
               <button className={view === 'members' ? 'view-btn active' : 'view-btn'} onClick={() => setView('members')}>회원</button>
-              <button className={view === 'verify' ? 'view-btn active' : 'view-btn'} onClick={() => setView('verify')}>검증</button>
               <button className={view === 'questions' ? 'view-btn active' : 'view-btn'} onClick={() => setView('questions')}>질문</button>
               <button className={view === 'system' ? 'view-btn active' : 'view-btn'} onClick={() => setView('system')}>시스템</button>
             </div>
@@ -450,7 +531,10 @@ export default function AdminPage() {
           </div>
 
           <div className="sidebar" hidden={view !== 'members'}>
-            <div className="sidebar-label">고객 목록</div>
+            <div className="sidebar-label">
+              고객 목록
+              <button type="button" className="member-add-btn" onClick={() => openMemberForm('add')}>+ 회원 추가</button>
+            </div>
             <div>
               {filteredCustomers.length === 0 ? (
                 <div className="no-result">검색 결과가 없습니다.</div>
@@ -482,7 +566,11 @@ export default function AdminPage() {
                   <div className="profile-left">
                     <div className="avatar-lg">{petEmoji(firstPet?.animal_category)}</div>
                     <div>
-                      <div className="profile-name">{selectedCustomer.name} <span className="cust-id">ID {selectedCustomer.user_id}</span></div>
+                      <div className="profile-name">
+                        {selectedCustomer.name} <span className="cust-id">ID {selectedCustomer.user_id}</span>
+                        <button type="button" className="member-action" onClick={() => openMemberForm('edit')}>수정</button>
+                        <button type="button" className="member-action danger" onClick={withdrawMember}>탈퇴</button>
+                      </div>
                       <div className="profile-tags">
                         {(selectedCustomer.pets || []).length === 0 ? (
                           <span className="tag">등록된 반려동물 없음</span>
@@ -523,14 +611,9 @@ export default function AdminPage() {
             )}
           </div>
 
-          <div className="full-view" hidden={view !== 'verify'}>
-            <div className="section-title">임베딩 검증 결과</div>
-            <p style={{ fontSize: '13px', color: 'var(--muted)' }}>준비 중입니다. tests/eval/ 에 pytest 기반 검증이 붙으면 이 자리에 결과가 표시됩니다 (TODO.md 참고).</p>
-          </div>
-
           <div className="full-view" hidden={view !== 'questions'}>
             <div className="section-title">고객 질문 기록</div>
-            <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '12px' }}>customer 페이지 AI 질문(/ask/me)과 관리자 AI 분석 질문(/ask)이 여기 쌓인다 - 검색 후보(사료/간식)와 실제 답변을 대조해볼 수 있다.</p>
+            <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '12px' }}>customer 페이지 AI 질문(/ask/me)이 여기 쌓인다 (관리자 AI 분석 질문은 남기지 않는다) - 검색 후보(사료/간식)와 실제 답변을 대조해볼 수 있다.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {questionsLoading ? (
                 <div className="ai-loading" style={{ height: 'auto', padding: '10px 0' }}><div className="spinner"></div>불러오는 중...</div>
@@ -566,6 +649,61 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      <dialog ref={memberDialogRef} className="member-dialog" onClose={() => setMemberForm(null)}>
+        {memberForm && (() => {
+          const isAdd = memberForm === 'add';
+          const c = isAdd ? {} : selectedCustomer;
+          const p = isAdd ? {} : (firstPet || {});
+          const petAllergies = (p.allergies || '').split(',').map((a) => a.trim());
+          const showPet = isAdd || firstPet;
+          return (
+            <form key={`${memberForm}-${c.user_id ?? 'new'}`} onSubmit={handleMemberSubmit}>
+              <h3>{isAdd ? '회원 추가' : `${c.name} 회원 수정`}</h3>
+              <div className="member-grid">
+                <label>이름*<input name="name" required defaultValue={c.name ?? ''} /></label>
+                <label>이메일*<input name="email" type="email" required defaultValue={c.email ?? ''} /></label>
+                {isAdd && <label>비밀번호*<input name="password" type="password" required /></label>}
+                <label>연락처<input name="phone" defaultValue={c.phone ?? ''} /></label>
+                <label>지역<input name="region" defaultValue={c.region ?? ''} /></label>
+              </div>
+              {showPet ? (
+                <>
+                  <h4>반려동물</h4>
+                  <div className="member-grid">
+                    <label>이름*<input name="pet_name" required defaultValue={p.name ?? ''} /></label>
+                    {isAdd && (
+                      <label>종<select name="pet_species" defaultValue="개"><option value="개">강아지</option><option value="고양이">고양이</option></select></label>
+                    )}
+                    <label>성별<select name="pet_gender" defaultValue={p.gender ?? ''}><option value="">-</option><option value="M">수컷</option><option value="F">암컷</option></select></label>
+                    <label>생일<input name="pet_birth_date" type="date" defaultValue={(p.birth_date ?? '').slice(0, 10)} /></label>
+                    <label>체중(kg)<input name="pet_weight_kg" type="number" step="0.1" min="0.1" defaultValue={p.weight_kg ?? ''} /></label>
+                    <label>체급<select name="pet_size" defaultValue={p.size ?? ''}><option value="">-</option>{[1, 2, 3, 4, 5].map((v) => <option key={v} value={v}>{sizeLabel(v)}</option>)}</select></label>
+                    <label>활동량<select name="pet_activity_level" defaultValue={p.activity_level ?? ''}><option value="">-</option>{[1, 2, 3].map((v) => <option key={v} value={v}>{activityLabel(v)}</option>)}</select></label>
+                    {!isAdd && (
+                      <label>중성화<select name="pet_neutered" defaultValue={p.neutered ?? ''}><option value="">-</option><option value="1">완료</option><option value="0">안 함</option></select></label>
+                    )}
+                    <label>식성<input name="diet_note" defaultValue={p.diet_note ?? ''} /></label>
+                    <label>피부<input name="skin_note" defaultValue={p.skin_note ?? ''} /></label>
+                  </div>
+                  <div className="member-allergies">
+                    {allergenOptions.map((name) => (
+                      <label key={name}><input type="checkbox" name="pet_allergies" value={name} defaultChecked={petAllergies.includes(name)} />{name}</label>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="member-note">등록된 반려동물이 없어 계정 정보만 고칠 수 있습니다.</p>
+              )}
+              <p className="member-error">{memberError}</p>
+              <div className="member-actions">
+                <button type="button" className="logout-link" onClick={closeMemberForm}>취소</button>
+                <button type="submit" className="ai-btn">{isAdd ? '추가' : '저장'}</button>
+              </div>
+            </form>
+          );
+        })()}
+      </dialog>
 
       <div className={aiPanelOpen ? 'overlay open' : 'overlay'} onClick={closeAllPanels}></div>
       <div className={aiPanelOpen ? 'ai-panel open' : 'ai-panel'}>
