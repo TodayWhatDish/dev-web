@@ -2,11 +2,19 @@
 // frontend/public/admin/admin.js (vanilla JS)를 Next.js로 옮긴 것 - customer/page.js와 같은 패턴.
 
 import { useEffect, useRef, useState } from "react";
-import Script from "next/script";
+import Chart from "chart.js/auto";
 import "./admin.css";
 
 // customer/page.js와 같은 자리 - 배포 주소는 Vercel의 NEXT_PUBLIC_API_URL 환경변수로 넣는다.
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
+async function errorDetail(res, fallback) {
+  const err = await res.json().catch(() => ({}));
+  if (typeof err.detail === 'string') return err.detail;
+  if (Array.isArray(err.detail)) return err.detail.map((d) => d.msg).join(', ') || fallback;
+  return fallback;
+}
 
 // ---- admin.js의 라벨 헬퍼 그대로 ----
 const petEmoji = (species) => (species === "개" ? "🐶" : species === "고양이" ? "🐱" : "🐾");
@@ -67,7 +75,6 @@ export default function AdminPage() {
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const [questionsError, setQuestionsError] = useState(false);
   const [systemStatus, setSystemStatus] = useState({ db: null, api: null });
-  const [chartReady, setChartReady] = useState(false);
 
   // 회원 추가/수정 폼: null = 닫힘, 'add' | 'edit'
   const [memberForm, setMemberForm] = useState(null);
@@ -88,6 +95,9 @@ export default function AdminPage() {
     localStorage.removeItem('adminToken');
     setIsLoggedIn(false);
     setSelectedCustomer(null);
+    // 다음 로그인 전까지 이전 세션의 고객 목록·AI 패널이 남아 보이지 않게 비운다
+    setAiPanelOpen(false);
+    setCustomers([]);
   };
 
   async function getCustomers() {
@@ -296,26 +306,33 @@ export default function AdminPage() {
 
   // 이 고객이 실제로 남긴 최근 리뷰를 근거로 한 추천. 질문 없이도 패널을 열면 항상 뜬다
   async function loadHistoryBasedRecs(userId) {
-    const res = await fetch(`${API}/api/customers/${userId}/similar-reviews`, { headers: authHeaders() });
-    if (res.status === 401) { showLoginGate(); return; }
-    setHistoryRecs(await res.json());
+    try {
+      const res = await fetch(`${API}/api/customers/${userId}/similar-reviews`, { headers: authHeaders() });
+      if (res.status === 401) { showLoginGate(); return; }
+      // 실패 응답엔 found가 없다 - 그대로 넣으면 렌더에서 found.length로 죽는다
+      if (!res.ok) { setHistoryRecs({ found: [], error: await errorDetail(res, '이력 기반 추천을 불러오지 못했습니다.') }); return; }
+      setHistoryRecs(await res.json());
+    } catch {
+      setHistoryRecs({ found: [], error: '서버에 연결할 수 없습니다.' });
+    }
   }
 
   // 판매전략/CS 응대안 생성. LLM 호출 비용이 있어 버튼으로 트리거한다.
   async function loadStrategy() {
     setStrategyLoading(true);
-    const res = await fetch(`${API}/api/customers/${selectedCustomer.user_id}/strategy`, {
-      method: 'POST',
-      headers: authHeaders(),
-    });
-    setStrategyLoading(false);
-    if (res.status === 401) { showLoginGate(); return; }
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setStrategyResult({ error: err.detail ?? '생성 실패' });
-      return;
+    try {
+      const res = await fetch(`${API}/api/customers/${selectedCustomer.user_id}/strategy`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (res.status === 401) { showLoginGate(); return; }
+      if (!res.ok) { setStrategyResult({ error: await errorDetail(res, '생성 실패') }); return; }
+      setStrategyResult(await res.json());
+    } catch {
+      setStrategyResult({ error: '서버에 연결할 수 없습니다.' });
+    } finally {
+      setStrategyLoading(false); // 네트워크 오류에도 스피너가 남지 않게
     }
-    setStrategyResult(await res.json());
   }
 
   // 선택된 고객의 첫 번째 펫 프로필로 /ask를 스트리밍 호출. NDJSON을 줄 단위로 읽는다.
@@ -344,6 +361,7 @@ export default function AdminPage() {
         body: JSON.stringify({ user_query: question, pet_id: petId, user_id: selectedCustomer.user_id }),
       });
       if (res.status === 401) { showLoginGate(); return; }
+      if (!res.ok) { setAskError(await errorDetail(res, '질문을 처리하지 못했습니다.')); return; }
       if (!res.body) { setAskError('응답을 받지 못했습니다.'); return; }
 
       const reader = res.body.getReader();
@@ -394,13 +412,13 @@ export default function AdminPage() {
     }
   }
 
-  // ---- 구매 금액 선그래프 (Chart.js, CDN으로 로드) ----
+  // ---- 구매 금액 선그래프 (Chart.js, npm 번들 - CDN 스크립트는 오염되면 관리자 토큰까지 읽힌다) ----
   useEffect(() => {
-    if (!chartReady || !selectedCustomer || !canvasRef.current || !window.Chart) return;
+    if (!selectedCustomer || !canvasRef.current) return;
     if (chartInstanceRef.current) chartInstanceRef.current.destroy();
     const purchases = selectedCustomer.purchases || [];
     const sorted = [...purchases].sort((a, b) => a.purchased_at.localeCompare(b.purchased_at));
-    chartInstanceRef.current = new window.Chart(canvasRef.current, {
+    chartInstanceRef.current = new Chart(canvasRef.current, {
       type: 'line',
       data: {
         labels: sorted.map((p) => (p.purchased_at || '').slice(0, 10)),
@@ -421,7 +439,7 @@ export default function AdminPage() {
         scales: { y: { beginAtZero: true, ticks: { callback: (v) => v.toLocaleString() + '원' } } },
       },
     });
-  }, [selectedCustomer, chartReady]);
+  }, [selectedCustomer]);
 
   function renderPurchaseTable(type) {
     const sort = purchaseSort[type];
@@ -477,7 +495,6 @@ export default function AdminPage() {
     <>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet" />
-      <Script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js" strategy="afterInteractive" onLoad={() => setChartReady(true)} />
 
       {!isLoggedIn ? (
         <section id="loginGate">
@@ -707,6 +724,8 @@ export default function AdminPage() {
           <div hidden={aiTab !== 'recs'}>
             {historyRecs === null ? (
               <div className="ai-loading" style={{ height: 'auto', padding: '10px 0' }}><div className="spinner"></div>구매 이력 확인 중...</div>
+            ) : historyRecs.error ? (
+              <p style={{ fontSize: '13px', color: '#c0392b' }}>{historyRecs.error}</p>
             ) : historyRecs.found.length === 0 ? (
               <p style={{ fontSize: '13px', color: 'var(--muted)' }}>참고할 구매 후기가 없어 이력 기반 추천을 만들 수 없습니다.</p>
             ) : (
