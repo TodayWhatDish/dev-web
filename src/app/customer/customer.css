@@ -230,3 +230,6 @@ header { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
   .hero-actions { flex-wrap: wrap; gap: 14px; }
   .section-title { margin: 40px 0 18px; }
 }
+
+.modal-box .poc-btn { width: 100%; margin-top: 12px; }
+.modal-box .poc-hint { margin: 6px 0 0; font-size: 12px; color: #888; text-align: center; }

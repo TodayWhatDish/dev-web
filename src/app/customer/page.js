@@ -170,6 +170,8 @@ export default function CustomerPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoggedIn(true);
       loadMyProfile();
+    } else if (new URLSearchParams(window.location.search).has('poc')) {
+      handlePocLogin();
     } else if (new URLSearchParams(window.location.search).has('login')) {
       setLoginOpen(true);
     }
@@ -210,12 +212,30 @@ export default function CustomerPage() {
       setLoginError(err.detail || '로그인에 실패했습니다.');
       return;
     }
-    const { access_token } = await res.json();
-    userTokenRef.current = access_token;
-    localStorage.setItem('userToken', access_token);
+    startSession((await res.json()).access_token);
+  }
+
+  function startSession(token) {
+    userTokenRef.current = token;
+    localStorage.setItem('userToken', token);
     setLoginOpen(false);
     setIsLoggedIn(true);
     loadMyProfile();
+  }
+
+  // 시연용: 서버가 펫·알레르기·구매후기까지 채운 새 계정을 만들어 토큰을 준다 (POST /poc/login)
+  async function handlePocLogin() {
+    setLoginError('');
+    setLoginSubmitting(true);
+    try {
+      const res = await fetch(`${API}/poc/login`, { method: 'POST' });
+      if (!res.ok) throw new Error();
+      startSession((await res.json()).access_token);
+    } catch {
+      setLoginOpen(true);
+      setLoginError('POC 모드를 시작할 수 없습니다.');
+    }
+    setLoginSubmitting(false);
   }
 
   // 알레르겐 목록은 GET /allergens에서 딱 한 번만 받아온다 - 회원가입 모달 열 때마다 다시 안 부른다
@@ -530,6 +550,7 @@ export default function CustomerPage() {
             <span>로그인하면 우리 아이의 종·체구·알레르기에 맞춘 추천으로 바뀌어요.</span>
             <button type="button" className="btn btn-solid" onClick={handleLoginClick}>로그인</button>
             <button type="button" className="btn btn-ghost" onClick={handleSignupClick}>회원가입</button>
+            <button type="button" className="btn btn-ghost" onClick={handlePocLogin} disabled={loginSubmitting}>POC 모드로 시작하기</button>
           </div>
         ) : recoBasis?.question ? (
           <div className="reco-basis">
@@ -595,6 +616,8 @@ export default function CustomerPage() {
               </button>
             </div>
           </form>
+          <button type="button" className="btn btn-ghost poc-btn" onClick={handlePocLogin} disabled={loginSubmitting}>POC 모드로 시작하기</button>
+          <p className="poc-hint">가입 없이 시연용 반려동물·구매 후기 자료로 둘러봅니다.</p>
         </div>
       </div>
 
