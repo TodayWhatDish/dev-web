@@ -2,7 +2,7 @@
 // frontend/public/admin/admin.js (vanilla JS)를 Next.js로 옮긴 것 - customer/page.js와 같은 패턴.
 
 import { useEffect, useRef, useState } from "react";
-import Script from "next/script";
+import Chart from "chart.js/auto";
 import "./admin.css";
 
 // customer/page.js와 같은 자리 - 배포 주소는 Vercel의 NEXT_PUBLIC_API_URL 환경변수로 넣는다.
@@ -75,7 +75,6 @@ export default function AdminPage() {
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const [questionsError, setQuestionsError] = useState(false);
   const [systemStatus, setSystemStatus] = useState({ db: null, api: null });
-  const [chartReady, setChartReady] = useState(false);
 
   const adminTokenRef = useRef('');
   // askQuestion()이 겹쳐 호출돼도 오래된 스트림이 화면에 못 쓰게 막는 세대 번호
@@ -331,13 +330,13 @@ export default function AdminPage() {
     }
   }
 
-  // ---- 구매 금액 선그래프 (Chart.js, CDN으로 로드) ----
+  // ---- 구매 금액 선그래프 (Chart.js, npm 번들 - CDN 스크립트는 오염되면 관리자 토큰까지 읽힌다) ----
   useEffect(() => {
-    if (!chartReady || !selectedCustomer || !canvasRef.current || !window.Chart) return;
+    if (!selectedCustomer || !canvasRef.current) return;
     if (chartInstanceRef.current) chartInstanceRef.current.destroy();
     const purchases = selectedCustomer.purchases || [];
     const sorted = [...purchases].sort((a, b) => a.purchased_at.localeCompare(b.purchased_at));
-    chartInstanceRef.current = new window.Chart(canvasRef.current, {
+    chartInstanceRef.current = new Chart(canvasRef.current, {
       type: 'line',
       data: {
         labels: sorted.map((p) => (p.purchased_at || '').slice(0, 10)),
@@ -358,7 +357,7 @@ export default function AdminPage() {
         scales: { y: { beginAtZero: true, ticks: { callback: (v) => v.toLocaleString() + '원' } } },
       },
     });
-  }, [selectedCustomer, chartReady]);
+  }, [selectedCustomer]);
 
   function renderPurchaseTable(type) {
     const sort = purchaseSort[type];
@@ -414,7 +413,6 @@ export default function AdminPage() {
     <>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet" />
-      <Script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js" strategy="afterInteractive" onLoad={() => setChartReady(true)} />
 
       {!isLoggedIn ? (
         <section id="loginGate">
