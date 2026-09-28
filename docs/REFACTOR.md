@@ -8,7 +8,7 @@
 
 | 우선순위 | 의미 | 완료 / 전체 |
 |---------|------|------------|
-| P0 | 버그 · 보안 · 법적 문제 | 0 / 10 |
+| P0 | 버그 · 보안 · 법적 문제 | 4 / 10 |
 | P1 | 구조 (파일/폴더/책임 분리) | 0 / 11 |
 | P2 | 코드 품질 · 접근성 | 0 / 18 |
 | P3 | 문서 · 도구 | 0 / 7 |
@@ -26,16 +26,16 @@
 
 | ID | 상태 | 위치 | 문제 | 수정 방법 | 완료 기준 |
 |----|------|------|------|----------|----------|
-| FE-01 | [ ] | `web/src/app/admin/page.js:219-223` | `loadHistoryBasedRecs`가 `res.ok`를 확인하지 않음. 500 응답이면 572행 `.found.length`에서 페이지 전체가 멈춤 | try/catch를 두르고, `!res.ok`이면 `{found: []}`와 에러 메시지 표시 | 백엔드를 끄고 AI 패널 열기 → 페이지가 유지되고 에러 문구가 보임 |
-| FE-02 | [ ] | `admin/page.js:226-240` | `loadStrategy`에 try가 없음. 네트워크 오류가 나면 스피너가 영원히 돎 | `try/finally`로 `setStrategyLoading(false)` 보장 | 백엔드를 끄고 전략 탭 열기 → 스피너가 사라짐 |
-| FE-03 | [ ] | `admin/page.js:264`, `customer/page.js:339-340` | 스트림을 읽기 전에 `res.ok`를 확인하지 않음. 422/500이면 "생각하고 있어요..."에서 멈춤 | `if (!res.ok)`에서 detail을 읽어 에러로 표시 | 빈 질문(422) 전송 → 에러 문구가 보임 |
-| FE-04 | [ ] | `customer/page.js:162-168` | 로그아웃해도 이름·전화·구매내역 state가 화면에 남음 (개인정보 노출) | 로그아웃 시 모든 state를 초기값으로 되돌림 | 로그인 → 마이페이지 → 로그아웃 → 개인정보가 안 보임 |
-| FE-05 | [ ] | `admin/page.js:80-85` | `showLoginGate`가 AI 패널과 고객 목록을 비우지 않음 | `setAiPanelOpen(false)`, `setCustomers([])` 추가 | 토큰 만료 후 로그인 화면만 보임 |
-| FE-06 | [ ] | `customer/page.js:97-146, 274, 303, 339` | `/me/*`가 401을 받아도 로그아웃 처리를 안 함 | FE-11 API 클라이언트의 `onUnauthorized`로 로그아웃 | localStorage 토큰을 조작하면 로그아웃 상태가 됨 |
-| FE-07 | [ ] | `admin/page.js:398` | Chart.js를 CDN에서 SRI 없이 로드함. CDN이 오염되면 관리자 토큰이 탈취될 수 있음 | `npm i chart.js`로 번들에 포함 | 네트워크 탭에 cdnjs 요청이 없음 |
-| FE-08 | [ ] | `web/public/pets/*.jpg` | CC BY / BY-SA 사진 6장에 출처 표기가 없음 (라이선스 위반) | `(site)/layout.js` footer에 작성자와 라이선스 링크 추가 | footer에 CREDITS.json 6건이 모두 보임 |
-| FE-09 | [ ] | `dev-data-embed/docker-compose.yml:13` | `../dev-web/dev-web/frontend`로 경로가 틀렸고, 가리키는 대상도 죽은 코드 | FE-28 결정에 따라 web 서비스를 삭제하거나 `web/` Dockerfile로 교체 | `docker compose config` 통과 |
-| FE-10 | [ ] | `admin/page.js:139,187`, `customer/page.js:151,195,258` | JWT가 localStorage에 있어 XSS로 읽힐 수 있음 | 단기: 위험을 README에 명시. 장기: rewrites로 같은 origin을 만들고 httpOnly 쿠키로 전환 | README에 명시됨 (장기 작업은 별도 이슈) |
+| FE-01 | [ ] 코드 반영, 확인 대기 | `web/src/app/admin/page.js:219-223` | `loadHistoryBasedRecs`가 `res.ok`를 확인하지 않음. 500 응답이면 572행 `.found.length`에서 페이지 전체가 멈춤 | try/catch를 두르고, `!res.ok`이면 `{found: []}`와 에러 메시지 표시 | 백엔드를 끄고 AI 패널 열기 → 페이지가 유지되고 에러 문구가 보임 |
+| FE-02 | [ ] 코드 반영, 확인 대기 | `admin/page.js:226-240` | `loadStrategy`에 try가 없음. 네트워크 오류가 나면 스피너가 영원히 돎 | `try/finally`로 `setStrategyLoading(false)` 보장 | 백엔드를 끄고 전략 탭 열기 → 스피너가 사라짐 |
+| FE-03 | [ ] 코드 반영, 확인 대기 | `admin/page.js:264`, `customer/page.js:339-340` | 스트림을 읽기 전에 `res.ok`를 확인하지 않음. 422/500이면 "생각하고 있어요..."에서 멈춤 | `if (!res.ok)`에서 detail을 읽어 에러로 표시 | 빈 질문(422) 전송 → 에러 문구가 보임 |
+| FE-04 | [ ] 코드 반영, 확인 대기 | `customer/page.js:162-168` | 로그아웃해도 이름·전화·구매내역 state가 화면에 남음 (개인정보 노출) | 로그아웃 시 모든 state를 초기값으로 되돌림 | 로그인 → 마이페이지 → 로그아웃 → 개인정보가 안 보임 |
+| FE-05 | [ ] 코드 반영, 확인 대기 | `admin/page.js:80-85` | `showLoginGate`가 AI 패널과 고객 목록을 비우지 않음 | `setAiPanelOpen(false)`, `setCustomers([])` 추가 | 토큰 만료 후 로그인 화면만 보임 |
+| FE-06 | [ ] 코드 반영, 확인 대기 | `customer/page.js:97-146, 274, 303, 339` | `/me/*`가 401을 받아도 로그아웃 처리를 안 함 | FE-11 API 클라이언트의 `onUnauthorized`로 로그아웃 | localStorage 토큰을 조작하면 로그아웃 상태가 됨 |
+| FE-07 | [x] | `admin/page.js:398` | Chart.js를 CDN에서 SRI 없이 로드함. CDN이 오염되면 관리자 토큰이 탈취될 수 있음 | `npm i chart.js`로 번들에 포함 | 네트워크 탭에 cdnjs 요청이 없음 |
+| FE-08 | [x] | `web/public/pets/*.jpg` | CC BY / BY-SA 사진 6장에 출처 표기가 없음 (라이선스 위반) | `(site)/layout.js` footer에 작성자와 라이선스 링크 추가 | footer에 CREDITS.json 6건이 모두 보임 |
+| FE-09 | [x] | `dev-data-embed/docker-compose.yml:13` | `../dev-web/dev-web/frontend`로 경로가 틀렸고, 가리키는 대상도 죽은 코드 | FE-28 결정에 따라 web 서비스를 삭제하거나 `web/` Dockerfile로 교체 | `docker compose config` 통과 |
+| FE-10 | [x] | `admin/page.js:139,187`, `customer/page.js:151,195,258` | JWT가 localStorage에 있어 XSS로 읽힐 수 있음 | 단기: 위험을 README에 명시. 장기: rewrites로 같은 origin을 만들고 httpOnly 쿠키로 전환 | README에 명시됨 (장기 작업은 별도 이슈) |
 
 > 이슈: FE-04~06 → [#4](https://github.com/TodayWhatDish/dev-web/issues/4) · FE-01~03 → [#5](https://github.com/TodayWhatDish/dev-web/issues/5) · FE-07 → [#6](https://github.com/TodayWhatDish/dev-web/issues/6) · FE-08 → [#7](https://github.com/TodayWhatDish/dev-web/issues/7). FE-09·10은 체크리스트로만 관리한다.
 
