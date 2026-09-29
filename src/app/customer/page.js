@@ -464,7 +464,6 @@ export default function CustomerPage() {
             오늘뭐멍냥
           </div>
           <div className="auth-buttons">
-            <a className="admin-link" href="/admin">관리자페이지</a>
             <button type="button" className="btn btn-ghost" onClick={handleLoginClick}>{isLoggedIn ? '로그아웃' : '로그인'}</button>
             <button type="button" className="btn btn-solid" onClick={handleSignupClick} hidden={isLoggedIn}>회원가입</button>
           </div>
