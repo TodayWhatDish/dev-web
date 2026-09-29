@@ -83,7 +83,7 @@ function basisChips(pet, query) {
 export default function CustomerPage() {
   // ---------------- 상태: 화면에 보이는 걸 결정하는 값은 전부 useState로 ----------------
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [profile, setProfile] = useState(null); // { name, email, phone, region } - GET /me/profile
+  const [profile, setProfile] = useState(null); // { name, email, phone, region, credit } - GET /me/profile
   const [pets, setPets] = useState([]);
   const [expandedPet, setExpandedPet] = useState(null); // 펫 핀 눌러서 상세 펼친 인덱스, null이면 접힘
   const [purchases, setPurchases] = useState([]);
@@ -114,6 +114,7 @@ export default function CustomerPage() {
   const [askSources, setAskSources] = useState([]);
 
   const [loadError, setLoadError] = useState('');
+  const [buyError, setBuyError] = useState('');
 
   // ---------------- ref: 화면엔 안 보이지만 값을 들고 있어야 하는 것들 ----------------
   // userToken은 렌더링에 직접 쓰이지 않아서(헤더에만 넣음) state 대신 ref로 둔다 - 바뀌어도 재렌더링 필요 없음
@@ -142,6 +143,7 @@ export default function CustomerPage() {
     setAskAnswerVisible(false);
     setAskSources([]);
     setLoadError('');
+    setBuyError('');
   }
 
   // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
@@ -152,7 +154,7 @@ export default function CustomerPage() {
       if (res.status === 401) { logout(); return; }
       if (res.ok) {
         const d = await res.json();
-        setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region });
+        setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region, credit: d.credit_krw });
         setPets(d.pets.map((p) => ({
           name: p.name, species: p.animal_category, emoji: p.animal_category === '고양이' ? '🐱' : '🐶',
           gender: p.gender, birthDate: p.birth_date, weightKg: p.weight_kg,
@@ -372,7 +374,8 @@ export default function CustomerPage() {
       return;
     }
     if (!card.productId) return; // 추천이 아직 안 뜬 자리(실 productId 없음) - 살 게 없다
-    // POST /me/purchases로 진짜 purchase 행을 만든다
+    setBuyError('');
+    // POST /me/purchases가 크레딧을 차감하고 purchase 행을 만든다. 잔액이 부족하면 409
     try {
       const res = await fetch(`${API}/me/purchases`, {
         method: 'POST',
@@ -380,8 +383,10 @@ export default function CustomerPage() {
         body: JSON.stringify({ product_id: Number(card.productId) }),
       });
       if (res.status === 401) { logout(); return; }
-      if (!res.ok) return;
-    } catch { return; }
+      if (!res.ok) { setBuyError(await errorDetail(res, '구매하지 못했습니다.')); return; }
+      const { credit_krw } = await res.json();
+      setProfile((p) => ({ ...p, credit: credit_krw }));
+    } catch { setBuyError('서버에 연결할 수 없습니다.'); return; }
     loadMyPurchases();
     setCards((prev) => prev.map((c) => (c.key === card.key ? { ...c, bought: true } : c)));
   }
@@ -464,6 +469,7 @@ export default function CustomerPage() {
             오늘뭐멍냥
           </div>
           <div className="auth-buttons">
+            {profile?.credit != null && <span className="credit" title="시연용 크레딧이에요. 실제로 결제되지 않아요.">{profile.credit.toLocaleString()} 크레딧</span>}
             <button type="button" className="btn btn-ghost" onClick={handleLoginClick}>{isLoggedIn ? '로그아웃' : '로그인'}</button>
             <button type="button" className="btn btn-solid" onClick={handleSignupClick} hidden={isLoggedIn}>회원가입</button>
           </div>
@@ -558,11 +564,11 @@ export default function CustomerPage() {
                   {asking ? <span className="spinner dark" /> : '질문'}
                 </button>
               </form>
-              <div className={isLoggedIn && exhausted ? 'ai-note upsell' : 'ai-note'}>
+              <div className="ai-note">
                 {!isLoggedIn
                   ? '로그인 후 이용할 수 있어요.'
                   : exhausted
-                    ? <>오늘 질문을 다 썼어요. <a href="#">멤버십으로 무제한 질문하기 →</a></>
+                    ? '오늘 질문을 다 썼어요. 내일 다시 물어봐 주세요.'
                     : '우리 아이 프로필 기준으로 답해드려요.'}
               </div>
               {askAnswerVisible && <div className="ai-answer">{askAnswer}</div>}
@@ -605,6 +611,7 @@ export default function CustomerPage() {
           </div>
         )}
 
+        {buyError && <p className="modal-error">{buyError}</p>}
         <div className="cards">
           {cardsLoading
             ? [0, 1, 2].map((i) => <div className="card-skeleton" key={i} />)
@@ -665,6 +672,7 @@ export default function CustomerPage() {
               </li>
             ))}
           </ol>
+          {buyError && <p className="modal-error">{buyError}</p>}
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={() => { setRecoOpen(false); cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>전체 추천 보기</button>
             <button type="button" className="btn btn-solid" onClick={() => setRecoOpen(false)}>닫기</button>

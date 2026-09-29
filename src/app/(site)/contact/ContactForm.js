@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 
-// TODO: 실제 받는 주소로 교체해야 합니다. 아직 주소를 받지 못해 자리표시자입니다.
-const TO = "hello@example.com";
+const TO = "t55300354@gmail.com";
 
 export default function ContactForm() {
   const [error, setError] = useState("");
