@@ -149,6 +149,9 @@ export default function CustomerPage() {
   // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
   // (customer_detail() 재사용 - app/api/routes/auth.py 참고).
   async function loadMyProfile() {
+    // 프로필 응답(~1.5초)을 기다리는 동안 예시 카드가 '추천 1'로 보이지 않게 바로 스켈레톤으로 바꾼다
+    setCardsLoading(true);
+    setLoadError('');
     try {
       const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
       if (res.status === 401) { logout(); return; }
@@ -162,6 +165,8 @@ export default function CustomerPage() {
           skinNote: p.skin_note, allergies: p.allergies,
         })));
         setPurchases(d.purchases.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
+        // 서버가 센 오늘 남은 질문 수 - 백엔드가 아직 안 주면(구버전) 화면 카운트를 그대로 둔다
+        if (d.questions_left != null) setQuotaUsed(QUOTA_MAX - d.questions_left);
       } else {
         setLoadError('내 정보를 불러오지 못했습니다.')
       }
@@ -392,7 +397,7 @@ export default function CustomerPage() {
   }
 
   // ---------------- AI 질문창: 로그인 필요 + 일일 횟수 ----------------
-  // quotaUsed는 여전히 화면에서만 세는 값이다 - 서버가 하루 횟수를 강제하지 않는다.
+  // 한도는 서버(/ask/me, 초과 시 429)가 강제한다. quotaUsed는 로그인 때 /me/profile의 questions_left로 맞추고 이후엔 화면에서 센다.
   const exhausted = quotaUsed >= QUOTA_MAX;
 
   async function handleAskSubmit(e) {
@@ -422,6 +427,7 @@ export default function CustomerPage() {
         setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.');
         return;
       }
+      if (res.status === 429) setQuotaUsed(QUOTA_MAX); // 다른 탭/기기에서 이미 다 쓴 경우 - 입력창을 잠근다
       if (!res.ok) { setAskAnswer(await errorDetail(res, '질문을 처리하지 못했습니다.')); return; }
       if (!res.body) { setAskAnswer('응답을 받지 못했습니다.'); return; }
 
@@ -611,6 +617,7 @@ export default function CustomerPage() {
           </div>
         )}
 
+        {loadError && <p className="modal-error">{loadError}</p>}
         {buyError && <p className="modal-error">{buyError}</p>}
         <div className="cards">
           {cardsLoading

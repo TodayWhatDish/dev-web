@@ -48,6 +48,8 @@ export default function AdminPage() {
   const [loginSubmitting, setLoginSubmitting] = useState(false);
 
   const [customers, setCustomers] = useState([]);
+  // 목록이 빈 이유 구분용: 'loading' | 'error' | 'done' - 불러오는 중에 '검색 결과가 없습니다'가 뜨지 않게
+  const [customersStatus, setCustomersStatus] = useState('loading');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   // 사료/간식 표 정렬 상태 - 헤더 클릭마다 갱신
@@ -114,9 +116,11 @@ export default function AdminPage() {
   }
 
   async function loadCustomers() {
+    setCustomersStatus('loading');
     try {
       setCustomers(await getCustomers());
-    } catch { /* 401은 showLoginGate가 처리, 그 외 실패는 목록을 빈 채로 둔다 */ }
+      setCustomersStatus('done');
+    } catch { setCustomersStatus('error'); /* 401은 showLoginGate가 처리 */ }
   }
 
   async function checkSystemStatus() {
@@ -536,7 +540,11 @@ export default function AdminPage() {
               <button type="button" className="member-add-btn" onClick={() => openMemberForm('add')}>+ 회원 추가</button>
             </div>
             <div>
-              {filteredCustomers.length === 0 ? (
+              {customersStatus === 'loading' ? (
+                <div className="ai-loading" style={{ height: 'auto', padding: '10px 0' }}><div className="spinner"></div>불러오는 중...</div>
+              ) : customersStatus === 'error' ? (
+                <div className="no-result">고객 목록을 불러오지 못했습니다.</div>
+              ) : filteredCustomers.length === 0 ? (
                 <div className="no-result">검색 결과가 없습니다.</div>
               ) : filteredCustomers.map((c) => (
                 <div
