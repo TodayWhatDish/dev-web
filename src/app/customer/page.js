@@ -9,6 +9,8 @@ import "./customer.css";
 // 배포 주소는 Vercel 프로젝트의 NEXT_PUBLIC_API_URL 환경변수로 넣는다 - 코드는 안 건드린다.
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const QUOTA_MAX = 5;
+// 지역은 시드 고객과 같은 17개 시·도 약칭. 자유 입력이면 브라우저 주소 자동완성('경기 — Gyeonggi-do')이 그대로 저장된다
+const REGIONS = ['서울', '경기', '인천', '강원', '충북', '충남', '세종', '대전', '전북', '전남', '광주', '경북', '경남', '대구', '울산', '부산', '제주'];
 
 // !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
 async function errorDetail(res, fallback) {
@@ -61,7 +63,9 @@ const DEFAULT_CARDS = [
 // /me/recommend의 found와 /ask/me의 sources는 같은 candidates() 결과라 한 함수로 카드로 바꾼다
 function toCard(p) {
   return {
-    key: p.product_id, emoji: '🐾', brand: p.brand, name: p.name, review: p.review,
+    key: p.product_id, emoji: '🐾', brand: p.brand, name: p.name,
+    // 검색용 청크는 '상품명 (목적) 주원료: … 별점 N점 후기: 본문' 모양이라 화면엔 후기 본문만
+    review: String(p.review ?? '').split('후기:').pop().trim(),
     price: p.price_krw, score: p.score, productType: p.product_type || null,
     productId: p.product_id, bought: false,
   };
@@ -81,7 +85,7 @@ function basisChips(pet, query) {
 export default function CustomerPage() {
   // ---------------- 상태: 화면에 보이는 걸 결정하는 값은 전부 useState로 ----------------
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [profile, setProfile] = useState(null); // { name, email, phone, region } - GET /me/profile
+  const [profile, setProfile] = useState(null); // { name, email, phone, region, credit } - GET /me/profile
   const [pets, setPets] = useState([]);
   const [expandedPet, setExpandedPet] = useState(null); // 펫 핀 눌러서 상세 펼친 인덱스, null이면 접힘
   const [purchases, setPurchases] = useState([]);
@@ -112,10 +116,12 @@ export default function CustomerPage() {
   const [askSources, setAskSources] = useState([]);
 
   const [loadError, setLoadError] = useState('');
+  const [buyError, setBuyError] = useState('');
 
   // ---------------- ref: 화면엔 안 보이지만 값을 들고 있어야 하는 것들 ----------------
   // userToken은 렌더링에 직접 쓰이지 않아서(헤더에만 넣음) state 대신 ref로 둔다 - 바뀌어도 재렌더링 필요 없음
   const userTokenRef = useRef('');
+  const [recoOpen, setRecoOpen] = useState(false); // 추천 결과 모달 - 추천이 새로 오면 열린다
   const cardsSectionRef = useRef(null); // 질문 답변 오면 이 위치로 스크롤
 
   // 로그아웃 = 로그인 전 화면으로 되돌리기. 토큰만 지우면 이전 회원의 프로필·구매이력·답변이 화면에 남는다.
@@ -139,17 +145,21 @@ export default function CustomerPage() {
     setAskAnswerVisible(false);
     setAskSources([]);
     setLoadError('');
+    setBuyError('');
   }
 
   // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
   // (customer_detail() 재사용 - app/api/routes/auth.py 참고).
   async function loadMyProfile() {
+    // 프로필 응답(~1.5초)을 기다리는 동안 예시 카드가 '추천 1'로 보이지 않게 바로 스켈레톤으로 바꾼다
+    setCardsLoading(true);
+    setLoadError('');
     try {
       const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
       if (res.status === 401) { logout(); return; }
       if (res.ok) {
         const d = await res.json();
-        setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region });
+        setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region, credit: d.credit_krw });
         setPets(d.pets.map((p) => ({
           name: p.name, species: p.animal_category, emoji: p.animal_category === '고양이' ? '🐱' : '🐶',
           gender: p.gender, birthDate: p.birth_date, weightKg: p.weight_kg,
@@ -157,6 +167,8 @@ export default function CustomerPage() {
           skinNote: p.skin_note, allergies: p.allergies,
         })));
         setPurchases(d.purchases.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
+        // 서버가 센 오늘 남은 질문 수 - 백엔드가 아직 안 주면(구버전) 화면 카운트를 그대로 둔다
+        if (d.questions_left != null) setQuotaUsed(QUOTA_MAX - d.questions_left);
       } else {
         setLoadError('내 정보를 불러오지 못했습니다.')
       }
@@ -186,6 +198,7 @@ export default function CustomerPage() {
       const { found, query } = await res.json();
       setCards((found || []).map(toCard));
       setRecoBasis({ query });
+      if (found?.length) setRecoOpen(true);
     } catch { 
       setCards([]);
       setLoadError('추천을 불러오지 못했습니다.');
@@ -193,23 +206,6 @@ export default function CustomerPage() {
       setCardsLoading(false);
     }
   }
-
-  // 페이지 열릴 때 딱 한 번: 로그인 유지. 배경 사진은 이제 customer.css에 정적으로 박혀있어
-  // (public/customer-bg.png) 따로 fetch할 게 없다.
-  useEffect(() => {
-    const token = localStorage.getItem('userToken') || '';
-    if (token) {
-      userTokenRef.current = token;
-      // localStorage는 마운트 후에만 읽을 수 있어서 이 setState는 여기서만 가능하다 (의도된 1회성 렌더 추가)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsLoggedIn(true);
-      loadMyProfile();
-    } else if (new URLSearchParams(window.location.search).has('poc')) {
-      handlePocLogin();
-    } else if (new URLSearchParams(window.location.search).has('login')) {
-      setLoginOpen(true);
-    }
-  }, []);
 
   // ---------------- 로그인/회원가입 ----------------
   function handleLoginClick() {
@@ -266,6 +262,23 @@ export default function CustomerPage() {
     }
     setLoginSubmitting(false);
   }
+
+  // 페이지 열릴 때 딱 한 번: 로그인 유지. 배경 사진은 이제 customer.css에 정적으로 박혀있어
+  // (public/customer-bg.png) 따로 fetch할 게 없다.
+  useEffect(() => {
+    const token = localStorage.getItem('userToken') || '';
+    if (token) {
+      userTokenRef.current = token;
+      // localStorage는 마운트 후에만 읽을 수 있어서 이 setState는 여기서만 가능하다 (의도된 1회성 렌더 추가)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsLoggedIn(true);
+      loadMyProfile();
+    } else if (new URLSearchParams(window.location.search).has('poc')) {
+      handlePocLogin();
+    } else if (new URLSearchParams(window.location.search).has('login')) {
+      setLoginOpen(true);
+    }
+  }, []);
 
   // 알레르겐 목록은 GET /allergens에서 딱 한 번만 받아온다 - 회원가입 모달 열 때마다 다시 안 부른다
   async function loadAllergenOptions() {
@@ -368,7 +381,8 @@ export default function CustomerPage() {
       return;
     }
     if (!card.productId) return; // 추천이 아직 안 뜬 자리(실 productId 없음) - 살 게 없다
-    // POST /me/purchases로 진짜 purchase 행을 만든다
+    setBuyError('');
+    // POST /me/purchases가 크레딧을 차감하고 purchase 행을 만든다. 잔액이 부족하면 409
     try {
       const res = await fetch(`${API}/me/purchases`, {
         method: 'POST',
@@ -376,14 +390,16 @@ export default function CustomerPage() {
         body: JSON.stringify({ product_id: Number(card.productId) }),
       });
       if (res.status === 401) { logout(); return; }
-      if (!res.ok) return;
-    } catch { return; }
+      if (!res.ok) { setBuyError(await errorDetail(res, '구매하지 못했습니다.')); return; }
+      const { credit_krw } = await res.json();
+      setProfile((p) => ({ ...p, credit: credit_krw }));
+    } catch { setBuyError('서버에 연결할 수 없습니다.'); return; }
     loadMyPurchases();
     setCards((prev) => prev.map((c) => (c.key === card.key ? { ...c, bought: true } : c)));
   }
 
   // ---------------- AI 질문창: 로그인 필요 + 일일 횟수 ----------------
-  // quotaUsed는 여전히 화면에서만 세는 값이다 - 서버가 하루 횟수를 강제하지 않는다.
+  // 한도는 서버(/ask/me, 초과 시 429)가 강제한다. quotaUsed는 로그인 때 /me/profile의 questions_left로 맞추고 이후엔 화면에서 센다.
   const exhausted = quotaUsed >= QUOTA_MAX;
 
   async function handleAskSubmit(e) {
@@ -413,6 +429,7 @@ export default function CustomerPage() {
         setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.');
         return;
       }
+      if (res.status === 429) setQuotaUsed(QUOTA_MAX); // 다른 탭/기기에서 이미 다 쓴 경우 - 입력창을 잠근다
       if (!res.ok) { setAskAnswer(await errorDetail(res, '질문을 처리하지 못했습니다.')); return; }
       if (!res.body) { setAskAnswer('응답을 받지 못했습니다.'); return; }
 
@@ -435,8 +452,12 @@ export default function CustomerPage() {
               setAskAnswer((prev) => prev + chunk.text);
             } else if (chunk.type === 'sources') {
               setAskSources(chunk.sources || []);
-              setCards((chunk.sources || []).map(toCard));
-              setRecoBasis({ question });
+              // 관련 상품이 없는 질문(날씨 등)이면 빈 목록이 온다 - 보던 추천 카드는 그대로 둔다
+              if (chunk.sources?.length) {
+                setCards(chunk.sources.map(toCard));
+                setRecoBasis({ question });
+                setRecoOpen(true);
+              }
             }
             else if (chunk.type === 'error') setAskAnswer(chunk.message);
           } catch { /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
@@ -451,7 +472,7 @@ export default function CustomerPage() {
   }
 
   return (
-    <>
+    <div className="customer">
       <div className="page">
         <header>
           <div className="logo">
@@ -459,7 +480,7 @@ export default function CustomerPage() {
             오늘뭐멍냥
           </div>
           <div className="auth-buttons">
-            <a className="admin-link" href="/admin">관리자페이지</a>
+            {profile?.credit != null && <span className="credit" title="시연용 크레딧이에요. 실제로 결제되지 않아요.">{profile.credit.toLocaleString()} 크레딧</span>}
             <button type="button" className="btn btn-ghost" onClick={handleLoginClick}>{isLoggedIn ? '로그아웃' : '로그인'}</button>
             <button type="button" className="btn btn-solid" onClick={handleSignupClick} hidden={isLoggedIn}>회원가입</button>
           </div>
@@ -537,7 +558,7 @@ export default function CustomerPage() {
             <h1>우리 아이 오늘 한 끼,<br />근거 있는 <span className="hl">후기</span>로 골라요.</h1>
             <p>실제로 산 사람들의 후기에서 찾은 근거만 보여드려요. 축종·체구·알레르기까지 우리 아이 프로필에 맞춰 걸러낸 사료와 간식이에요.</p>
             <div className="hero-actions">
-              <button type="button" className="btn-cta" onClick={() => cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>오늘의 추천 보러가기 →</button>
+              <button type="button" className="btn-cta" onClick={() => (isLoggedIn && cards.length ? setRecoOpen(true) : cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }))}>오늘의 추천 보러가기 →</button>
               <button type="button" className="link-quiet" onClick={() => setInfoOpen(true)}>어떻게 고르나요?</button>
             </div>
           </div>
@@ -554,11 +575,11 @@ export default function CustomerPage() {
                   {asking ? <span className="spinner dark" /> : '질문'}
                 </button>
               </form>
-              <div className={isLoggedIn && exhausted ? 'ai-note upsell' : 'ai-note'}>
+              <div className="ai-note">
                 {!isLoggedIn
                   ? '로그인 후 이용할 수 있어요.'
                   : exhausted
-                    ? <>오늘 질문을 다 썼어요. <a href="#">멤버십으로 무제한 질문하기 →</a></>
+                    ? '오늘 질문을 다 썼어요. 내일 다시 물어봐 주세요.'
                     : '우리 아이 프로필 기준으로 답해드려요.'}
               </div>
               {askAnswerVisible && <div className="ai-answer">{askAnswer}</div>}
@@ -601,6 +622,8 @@ export default function CustomerPage() {
           </div>
         )}
 
+        {loadError && <p className="modal-error">{loadError}</p>}
+        {buyError && <p className="modal-error">{buyError}</p>}
         <div className="cards">
           {cardsLoading
             ? [0, 1, 2].map((i) => <div className="card-skeleton" key={i} />)
@@ -626,6 +649,46 @@ export default function CustomerPage() {
                 </button>
               </div>
             ))}
+        </div>
+      </div>
+
+      <div className="modal-overlay" hidden={!recoOpen} onClick={(e) => e.target === e.currentTarget && setRecoOpen(false)}>
+        <div className="modal-box reco-modal">
+          <div className="reco-modal-head">
+            <span className="reco-modal-kicker">{recoBasis?.question ? 'AI 답변 근거 상품' : '오늘의 추천'}</span>
+            <h3>{recoBasis?.question ? `“${recoBasis.question}”` : `${pets[0]?.name ?? '우리 아이'}를 위한 추천 ${Math.min(cards.length, 3)}가지`}</h3>
+            {!recoBasis?.question && basisChips(pets[0], recoBasis?.query).length > 0 && (
+              <div className="reco-modal-chips">
+                {basisChips(pets[0], recoBasis?.query).map((c) => <span className="chip" key={c}>{c}</span>)}
+              </div>
+            )}
+          </div>
+          <ol className="reco-list">
+            {cards.slice(0, 3).map((c, i) => (
+              <li className="reco-item" key={c.key}>
+                <span className="reco-rank">{i + 1}</span>
+                <div className="reco-thumb">
+                  {pickProductImage(c) ? <img src={pickProductImage(c)} alt={c.name} /> : c.emoji}
+                </div>
+                <div className="reco-body">
+                  <div className="reco-name"><span className="brand">{c.brand}</span> {c.name}</div>
+                  <p className="reco-review">&quot;{c.review}&quot;</p>
+                  <div className="reco-meta">
+                    <span className="price">{c.price.toLocaleString()}원</span>
+                    <span className="reco-match"><i style={{ width: `${Math.round(c.score * 100)}%` }} />매칭 {Math.round(c.score * 100)}%</span>
+                  </div>
+                </div>
+                <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought}>
+                  {c.bought ? '구매 완료 ✓' : '구매하기'}
+                </button>
+              </li>
+            ))}
+          </ol>
+          {buyError && <p className="modal-error">{buyError}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => { setRecoOpen(false); cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>전체 추천 보기</button>
+            <button type="button" className="btn btn-solid" onClick={() => setRecoOpen(false)}>닫기</button>
+          </div>
         </div>
       </div>
 
@@ -666,7 +729,10 @@ export default function CustomerPage() {
             <input type="password" name="password" placeholder="비밀번호" required />
             <input type="text" name="name" placeholder="이름" required />
             <input type="tel" name="phone" placeholder="연락처 (선택)" />
-            <input type="text" name="region" placeholder="지역 (선택)" />
+            <select name="region" defaultValue="">
+              <option value="">지역 (선택)</option>
+              {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
             <hr />
             <input type="text" name="pet_name" placeholder="반려동물 이름" required />
 
@@ -748,6 +814,6 @@ export default function CustomerPage() {
           </form>
         </div>
       </div>
-    </>
+    </div>
   );
 }
