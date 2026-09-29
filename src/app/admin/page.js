@@ -7,6 +7,8 @@ import "./admin.css";
 
 // customer/page.js와 같은 자리 - 배포 주소는 Vercel의 NEXT_PUBLIC_API_URL 환경변수로 넣는다.
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// 지역은 시드 고객과 같은 17개 시·도 약칭. 자유 입력이면 브라우저 주소 자동완성('경기 — Gyeonggi-do')이 그대로 저장된다
+const REGIONS = ['서울', '경기', '인천', '강원', '충북', '충남', '세종', '대전', '전북', '전남', '광주', '경북', '경남', '대구', '울산', '부산', '제주'];
 
 // !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
 async function errorDetail(res, fallback) {
@@ -48,6 +50,8 @@ export default function AdminPage() {
   const [loginSubmitting, setLoginSubmitting] = useState(false);
 
   const [customers, setCustomers] = useState([]);
+  // 목록이 빈 이유 구분용: 'loading' | 'error' | 'done' - 불러오는 중에 '검색 결과가 없습니다'가 뜨지 않게
+  const [customersStatus, setCustomersStatus] = useState('loading');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   // 사료/간식 표 정렬 상태 - 헤더 클릭마다 갱신
@@ -95,6 +99,7 @@ export default function AdminPage() {
     localStorage.removeItem('adminToken');
     setIsLoggedIn(false);
     setSelectedCustomer(null);
+    setView('members');
     // 다음 로그인 전까지 이전 세션의 고객 목록·AI 패널이 남아 보이지 않게 비운다
     setAiPanelOpen(false);
     setCustomers([]);
@@ -114,9 +119,11 @@ export default function AdminPage() {
   }
 
   async function loadCustomers() {
+    setCustomersStatus('loading');
     try {
       setCustomers(await getCustomers());
-    } catch { /* 401은 showLoginGate가 처리, 그 외 실패는 목록을 빈 채로 둔다 */ }
+      setCustomersStatus('done');
+    } catch { setCustomersStatus('error'); /* 401은 showLoginGate가 처리 */ }
   }
 
   async function checkSystemStatus() {
@@ -167,12 +174,12 @@ export default function AdminPage() {
     return () => clearInterval(id);
   }, [isLoggedIn]);
 
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    if (view === 'system') checkSystemStatus();
-    if (view === 'questions') loadQuestions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, isLoggedIn]);
+  // 탭을 누를 때 그 탭 데이터를 새로 받는다 - effect가 아니라 클릭 핸들러에서 (react.dev/learn/you-might-not-need-an-effect)
+  function showView(next) {
+    setView(next);
+    if (next === 'system') checkSystemStatus();
+    if (next === 'questions') loadQuestions();
+  }
 
   async function handleLoginSubmit(e) {
     e.preventDefault();
@@ -425,12 +432,12 @@ export default function AdminPage() {
         datasets: [{
           label: '구매 금액(원)',
           data: sorted.map((p) => p.unit_price_krw * p.quantity),
-          borderColor: '#2f6f5e',
-          backgroundColor: 'rgba(47,111,94,0.12)',
+          borderColor: '#E5883A',
+          backgroundColor: 'rgba(229,136,58,0.15)',
           tension: 0.25,
           fill: true,
           pointRadius: 3,
-          pointBackgroundColor: '#2f6f5e',
+          pointBackgroundColor: '#E5883A',
         }],
       },
       options: {
@@ -492,9 +499,7 @@ export default function AdminPage() {
   const totalSpent = selectedCustomer ? (selectedCustomer.purchases || []).reduce((sum, p) => sum + p.unit_price_krw * p.quantity, 0) : 0;
 
   return (
-    <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet" />
+    <div className="admin">
 
       {!isLoggedIn ? (
         <section id="loginGate">
@@ -517,9 +522,9 @@ export default function AdminPage() {
             </div>
             <div className="topbar-title">고객 관리</div>
             <div className="view-switch">
-              <button className={view === 'members' ? 'view-btn active' : 'view-btn'} onClick={() => setView('members')}>회원</button>
-              <button className={view === 'questions' ? 'view-btn active' : 'view-btn'} onClick={() => setView('questions')}>질문</button>
-              <button className={view === 'system' ? 'view-btn active' : 'view-btn'} onClick={() => setView('system')}>시스템</button>
+              <button className={view === 'members' ? 'view-btn active' : 'view-btn'} onClick={() => showView('members')}>회원</button>
+              <button className={view === 'questions' ? 'view-btn active' : 'view-btn'} onClick={() => showView('questions')}>질문</button>
+              <button className={view === 'system' ? 'view-btn active' : 'view-btn'} onClick={() => showView('system')}>시스템</button>
             </div>
             <div className="spacer"></div>
             <span className="whoami">관리자</span>
@@ -536,7 +541,11 @@ export default function AdminPage() {
               <button type="button" className="member-add-btn" onClick={() => openMemberForm('add')}>+ 회원 추가</button>
             </div>
             <div>
-              {filteredCustomers.length === 0 ? (
+              {customersStatus === 'loading' ? (
+                <div className="ai-loading" style={{ height: 'auto', padding: '10px 0' }}><div className="spinner"></div>불러오는 중...</div>
+              ) : customersStatus === 'error' ? (
+                <div className="no-result">고객 목록을 불러오지 못했습니다.</div>
+              ) : filteredCustomers.length === 0 ? (
                 <div className="no-result">검색 결과가 없습니다.</div>
               ) : filteredCustomers.map((c) => (
                 <div
@@ -563,13 +572,11 @@ export default function AdminPage() {
             ) : (
               <>
                 <div className="profile-card">
-                  <div className="profile-left">
+                  <div className="profile-head">
                     <div className="avatar-lg">{petEmoji(firstPet?.animal_category)}</div>
-                    <div>
+                    <div className="profile-who">
                       <div className="profile-name">
                         {selectedCustomer.name} <span className="cust-id">ID {selectedCustomer.user_id}</span>
-                        <button type="button" className="member-action" onClick={() => openMemberForm('edit')}>수정</button>
-                        <button type="button" className="member-action danger" onClick={withdrawMember}>탈퇴</button>
                       </div>
                       <div className="profile-tags">
                         {(selectedCustomer.pets || []).length === 0 ? (
@@ -579,23 +586,34 @@ export default function AdminPage() {
                         ))}
                       </div>
                     </div>
+                    <div className="profile-actions">
+                      <button type="button" className="member-action" onClick={() => openMemberForm('edit')}>수정</button>
+                      <button type="button" className="member-action danger" onClick={withdrawMember}>탈퇴</button>
+                    </div>
                   </div>
-                  <div className="profile-right">
-                    <span>이메일</span><b>{selectedCustomer.email ?? '-'}</b>
-                    <span>연락처</span><b>{selectedCustomer.phone ?? '-'}</b>
-                    <span>반려동물 나이</span><b>{ageLabel(firstPet?.birth_date)}</b>
-                    <span>가입일</span><b>{(selectedCustomer.created_at || '').slice(0, 10)}</b>
-                    <span>구매 건수</span><b>{(selectedCustomer.purchases || []).length}건</b>
-                    <span>총 구매액</span><b>{totalSpent.toLocaleString()}원</b>
-                    <span>성별</span><b>{genderLabel(firstPet?.gender)}</b>
-                    <span>체급</span><b>{sizeLabel(firstPet?.size)}</b>
-                    <span>몸무게</span><b>{firstPet?.weight_kg != null ? `${firstPet.weight_kg}kg` : '-'}</b>
-                    <span>중성화</span><b>{neuteredLabel(firstPet?.neutered)}</b>
-                    <span>활동량</span><b>{activityLabel(firstPet?.activity_level)}</b>
-                    <span>알러지</span><b>{firstPet?.allergies || '-'}</b>
-                    <span>식성</span><b>{firstPet?.diet_note ?? '-'}</b>
-                    <span>피부</span><b>{firstPet?.skin_note ?? '-'}</b>
-                  </div>
+
+                  {/* 라벨 위, 값 아래 타일. 회원 정보와 첫 번째 펫 정보를 나눠 보여준다 */}
+                  <div className="info-title">회원 정보</div>
+                  <dl className="info-grid">
+                    <div className="wide"><dt>이메일</dt><dd>{selectedCustomer.email ?? '-'}</dd></div>
+                    <div><dt>연락처</dt><dd>{selectedCustomer.phone ?? '-'}</dd></div>
+                    <div><dt>가입일</dt><dd>{(selectedCustomer.created_at || '').slice(0, 10)}</dd></div>
+                    <div><dt>구매 건수</dt><dd>{(selectedCustomer.purchases || []).length}건</dd></div>
+                    <div><dt>총 구매액</dt><dd>{totalSpent.toLocaleString()}원</dd></div>
+                  </dl>
+
+                  <div className="info-title">반려동물{firstPet ? ` · ${firstPet.name}` : ''}</div>
+                  <dl className="info-grid">
+                    <div><dt>나이</dt><dd>{ageLabel(firstPet?.birth_date)}</dd></div>
+                    <div><dt>성별</dt><dd>{genderLabel(firstPet?.gender)}</dd></div>
+                    <div><dt>체급</dt><dd>{sizeLabel(firstPet?.size)}</dd></div>
+                    <div><dt>몸무게</dt><dd>{firstPet?.weight_kg != null ? `${firstPet.weight_kg}kg` : '-'}</dd></div>
+                    <div><dt>중성화</dt><dd>{neuteredLabel(firstPet?.neutered)}</dd></div>
+                    <div><dt>활동량</dt><dd>{activityLabel(firstPet?.activity_level)}</dd></div>
+                    <div className="wide"><dt>알러지</dt><dd>{firstPet?.allergies || '-'}</dd></div>
+                    <div className="wide"><dt>식성</dt><dd>{firstPet?.diet_note ?? '-'}</dd></div>
+                    <div className="wide"><dt>피부</dt><dd>{firstPet?.skin_note ?? '-'}</dd></div>
+                  </dl>
                 </div>
 
                 <div className="section-title">구매 금액 추이</div>
@@ -665,7 +683,10 @@ export default function AdminPage() {
                 <label>이메일*<input name="email" type="email" required defaultValue={c.email ?? ''} /></label>
                 {isAdd && <label>비밀번호*<input name="password" type="password" required /></label>}
                 <label>연락처<input name="phone" defaultValue={c.phone ?? ''} /></label>
-                <label>지역<input name="region" defaultValue={c.region ?? ''} /></label>
+                <label>지역<select name="region" defaultValue={c.region ?? ''}>
+                  <option value="">선택 안 함</option>
+                  {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select></label>
               </div>
               {showPet ? (
                 <>
@@ -800,6 +821,6 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

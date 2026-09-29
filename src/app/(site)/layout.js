@@ -49,8 +49,7 @@ export default function SiteLayout({ children }) {
           </nav>
         </div>
         <p style={{ marginTop: 24 }}>
-          개와 고양이를 위한 사료·간식 추천 서비스입니다. 현재 준비 중이며, 화면에 보이는 후기와 추천 예시는
-          모두 샘플 데이터로 만든 것입니다.
+          개와 고양이를 위한 사료·간식 추천 서비스입니다. 포트폴리오용 서비스로, 상품과 후기는 샘플 데이터입니다.
         </p>
         {/* CC BY / BY-SA 사진은 저작자·출처·라이선스 표기가 이용 조건이다. 목록은 CREDITS.json 한 곳에서만 관리한다 */}
         <p className="foot-credits" style={{ marginTop: 12, fontSize: 12, opacity: 0.8 }}>
