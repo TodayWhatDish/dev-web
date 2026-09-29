@@ -7,6 +7,8 @@ import "./admin.css";
 
 // customer/page.js와 같은 자리 - 배포 주소는 Vercel의 NEXT_PUBLIC_API_URL 환경변수로 넣는다.
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// 지역은 시드 고객과 같은 17개 시·도 약칭. 자유 입력이면 브라우저 주소 자동완성('경기 — Gyeonggi-do')이 그대로 저장된다
+const REGIONS = ['서울', '경기', '인천', '강원', '충북', '충남', '세종', '대전', '전북', '전남', '광주', '경북', '경남', '대구', '울산', '부산', '제주'];
 
 // !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
 async function errorDetail(res, fallback) {
@@ -497,7 +499,7 @@ export default function AdminPage() {
   const totalSpent = selectedCustomer ? (selectedCustomer.purchases || []).reduce((sum, p) => sum + p.unit_price_krw * p.quantity, 0) : 0;
 
   return (
-    <>
+    <div className="admin">
 
       {!isLoggedIn ? (
         <section id="loginGate">
@@ -681,7 +683,10 @@ export default function AdminPage() {
                 <label>이메일*<input name="email" type="email" required defaultValue={c.email ?? ''} /></label>
                 {isAdd && <label>비밀번호*<input name="password" type="password" required /></label>}
                 <label>연락처<input name="phone" defaultValue={c.phone ?? ''} /></label>
-                <label>지역<input name="region" defaultValue={c.region ?? ''} /></label>
+                <label>지역<select name="region" defaultValue={c.region ?? ''}>
+                  <option value="">선택 안 함</option>
+                  {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select></label>
               </div>
               {showPet ? (
                 <>
@@ -816,6 +821,6 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

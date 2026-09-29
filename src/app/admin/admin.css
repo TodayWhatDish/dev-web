@@ -1,5 +1,7 @@
 /* 브랜드 브라운 팔레트(고객 화면 customer.css 와 같은 값). 버튼·글자는 코코아, 강조 테두리는 캐러멜. */
-:root {
+/* 페이지 이동 후에도 다른 화면에 번지지 않게 전부 .admin 안에 가둔다 */
+.admin {
+& {
   --bg: #FBF5EC;
   --panel: #ffffff;
   --ink: #3B2419;
@@ -14,7 +16,8 @@
   --gold-soft: #FFD9A0;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body {
+& {
+  flex: 1; /* 예전 body 자리 - 화면 높이를 다 채운다 */
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
   background: var(--bg);
   color: var(--ink);
@@ -95,10 +98,6 @@ body {
 
 .main { overflow-y: auto; padding: 28px 36px 60px; }
 .main[hidden] { display: none; }
-@keyframes riseIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 .main .profile-card, .main .chart-card, .main table.purchases, .main .section-title { animation: riseIn .4s ease both; }
 .main .chart-card { animation-delay: .06s; }
 .main table.purchases { animation-delay: .12s; }
@@ -181,7 +180,6 @@ table.purchases th.sortable:hover { color: var(--accent); }
 .ai-block li { font-size: 13.5px; line-height: 1.7; margin-bottom: 4px; color: var(--ink); }
 .ai-loading { display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 13.5px; }
 .spinner { width: 22px; height: 22px; border: 2.5px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 /* 회원 추가/수정/탈퇴 - 모달은 네이티브 <dialog> (ESC·포커스 가두기 공짜) */
 .sidebar-label { display: flex; align-items: center; justify-content: space-between; }
@@ -203,3 +201,10 @@ table.purchases th.sortable:hover { color: var(--accent); }
 .member-note { font-size: 13px; color: var(--muted); margin-top: 14px; }
 .member-error { color: #c0392b; font-size: 13px; min-height: 18px; margin-top: 12px; }
 .member-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+}
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }

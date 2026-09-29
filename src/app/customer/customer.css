@@ -3,11 +3,13 @@
    diff를 최소화했다(--teal/--coral 등 이름은 색상 용도를 가리키던 자리 그대로 재사용).
    실 데이터 연결 전이라 반려동물 2마리 · 구매 이력 · 상품 3장은 전부 customer.js 안 목업이다.
    상품 썸네일은 이미지 대신 이모지 하나만 쓴다 - 실사진은 톤이 바뀔 때마다 다시 골라야 해서 번거롭다. */
+/* 페이지 이동 후에도 다른 화면에 번지지 않게 전부 .customer 안에 가둔다 */
+.customer {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :focus-visible { outline: 3px solid var(--coral); outline-offset: 3px; }
 ::selection { background: #FF7D8A; color: #fff; }
 
-:root {
+& {
   --cream: #FFF3E2;
   --sand: #FFD9A0;
   --ink: #3B2419;
@@ -23,7 +25,8 @@
 /* 배경은 사용자가 고른 강아지 사진(public/customer-bg.png)으로 고정한다 - 더 이상 Unsplash를
    fetch하지 않는다(예전엔 /background 프록시로 랜덤성 없는 고정 사진 하나를 받아왔는데, 이제
    그 사진 자체를 정적 파일로 박아뒀으니 API 호출도 크레딧 표시도 필요 없다). */
-body {
+& {
+  flex: 1; /* 예전 body 자리 - 화면 높이를 다 채운다 */
   font-family: 'Pretendard', -apple-system, sans-serif;
   word-break: keep-all;
   background: linear-gradient(rgba(255,243,226,.92), rgba(255,243,226,.92)), url('/customer-bg.png');
@@ -185,8 +188,6 @@ header { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 .btn-buy.bought { background: var(--sand); color: var(--ink-soft); cursor: default; }
 
 /* ===== 동적 인터랙션: hover 시 살짝 뜨는 느낌 + 진입 애니메이션으로 정적인 느낌을 줄인다 ===== */
-@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 .hero { animation: fadeUp .5s ease both; }
 .cards .card { animation: fadeUp .5s ease both; }
@@ -213,7 +214,6 @@ header { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 .spinner.dark { border-color: var(--line); border-top-color: var(--teal-deep); }
 
 /* 추천 카드 로딩 중(로그인 직후 /me/recommend 응답 대기) 보여주는 스켈레톤 - 실제 카드와 같은 높이로 깜빡인다 */
-@keyframes shimmer { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
 .card-skeleton { height: 276px; border-radius: 20px; background: var(--cream); animation: shimmer 1.2s ease-in-out infinite; }
 
 @media (max-width: 860px) {
@@ -252,3 +252,8 @@ header { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 .reco-match i { position: absolute; inset: 0 auto 0 0; background: #f2b457; z-index: -1; }
 .reco-item .btn-buy { width: auto; padding: 10px 16px; white-space: nowrap; }
 @media (max-width: 560px) { .reco-item { grid-template-columns: 64px 1fr; } .reco-thumb { width: 64px; height: 64px; } .reco-item .btn-buy { grid-column: 1 / -1; } }
+}
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }

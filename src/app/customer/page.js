@@ -9,6 +9,8 @@ import "./customer.css";
 // 배포 주소는 Vercel 프로젝트의 NEXT_PUBLIC_API_URL 환경변수로 넣는다 - 코드는 안 건드린다.
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const QUOTA_MAX = 5;
+// 지역은 시드 고객과 같은 17개 시·도 약칭. 자유 입력이면 브라우저 주소 자동완성('경기 — Gyeonggi-do')이 그대로 저장된다
+const REGIONS = ['서울', '경기', '인천', '강원', '충북', '충남', '세종', '대전', '전북', '전남', '광주', '경북', '경남', '대구', '울산', '부산', '제주'];
 
 // !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
 async function errorDetail(res, fallback) {
@@ -450,9 +452,12 @@ export default function CustomerPage() {
               setAskAnswer((prev) => prev + chunk.text);
             } else if (chunk.type === 'sources') {
               setAskSources(chunk.sources || []);
-              setCards((chunk.sources || []).map(toCard));
-              setRecoBasis({ question });
-              if (chunk.sources?.length) setRecoOpen(true);
+              // 관련 상품이 없는 질문(날씨 등)이면 빈 목록이 온다 - 보던 추천 카드는 그대로 둔다
+              if (chunk.sources?.length) {
+                setCards(chunk.sources.map(toCard));
+                setRecoBasis({ question });
+                setRecoOpen(true);
+              }
             }
             else if (chunk.type === 'error') setAskAnswer(chunk.message);
           } catch { /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
@@ -467,7 +472,7 @@ export default function CustomerPage() {
   }
 
   return (
-    <>
+    <div className="customer">
       <div className="page">
         <header>
           <div className="logo">
@@ -724,7 +729,10 @@ export default function CustomerPage() {
             <input type="password" name="password" placeholder="비밀번호" required />
             <input type="text" name="name" placeholder="이름" required />
             <input type="tel" name="phone" placeholder="연락처 (선택)" />
-            <input type="text" name="region" placeholder="지역 (선택)" />
+            <select name="region" defaultValue="">
+              <option value="">지역 (선택)</option>
+              {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
             <hr />
             <input type="text" name="pet_name" placeholder="반려동물 이름" required />
 
@@ -806,6 +814,6 @@ export default function CustomerPage() {
           </form>
         </div>
       </div>
-    </>
+    </div>
   );
 }
