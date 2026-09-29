@@ -795,7 +795,12 @@ export default function AdminPage() {
             </form>
             <div style={{ color: '#c0392b', fontSize: '13px', marginTop: '10px' }}>{askError}</div>
             <div className="answer-text" style={{ marginTop: '14px', whiteSpace: 'pre-wrap' }}>{askAnswer}</div>
-            <div style={{ color: '#c0392b', fontSize: '13px', marginTop: '10px', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>{askVerify}</div>
+            {/* 반증은 답변이 다 끝난 뒤 따로 오므로(수 초), 그 사이 비어 보이지 않게 스피너를 둔다 */}
+            {asking && askAnswer && !askVerify && !askError ? (
+              <div className="ai-loading" style={{ height: 'auto', padding: '10px 0' }}><div className="spinner"></div>반증 결과 기다리는 중...</div>
+            ) : (
+              <div style={{ color: '#c0392b', fontSize: '13px', marginTop: '10px', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>{askVerify}</div>
+            )}
 
             <div className="scroll-block">
               {askFacts && (
