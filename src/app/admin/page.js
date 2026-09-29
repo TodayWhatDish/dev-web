@@ -97,6 +97,7 @@ export default function AdminPage() {
     localStorage.removeItem('adminToken');
     setIsLoggedIn(false);
     setSelectedCustomer(null);
+    setView('members');
     // 다음 로그인 전까지 이전 세션의 고객 목록·AI 패널이 남아 보이지 않게 비운다
     setAiPanelOpen(false);
     setCustomers([]);
@@ -171,12 +172,12 @@ export default function AdminPage() {
     return () => clearInterval(id);
   }, [isLoggedIn]);
 
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    if (view === 'system') checkSystemStatus();
-    if (view === 'questions') loadQuestions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, isLoggedIn]);
+  // 탭을 누를 때 그 탭 데이터를 새로 받는다 - effect가 아니라 클릭 핸들러에서 (react.dev/learn/you-might-not-need-an-effect)
+  function showView(next) {
+    setView(next);
+    if (next === 'system') checkSystemStatus();
+    if (next === 'questions') loadQuestions();
+  }
 
   async function handleLoginSubmit(e) {
     e.preventDefault();
@@ -429,12 +430,12 @@ export default function AdminPage() {
         datasets: [{
           label: '구매 금액(원)',
           data: sorted.map((p) => p.unit_price_krw * p.quantity),
-          borderColor: '#2f6f5e',
-          backgroundColor: 'rgba(47,111,94,0.12)',
+          borderColor: '#E5883A',
+          backgroundColor: 'rgba(229,136,58,0.15)',
           tension: 0.25,
           fill: true,
           pointRadius: 3,
-          pointBackgroundColor: '#2f6f5e',
+          pointBackgroundColor: '#E5883A',
         }],
       },
       options: {
@@ -497,8 +498,6 @@ export default function AdminPage() {
 
   return (
     <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet" />
 
       {!isLoggedIn ? (
         <section id="loginGate">
@@ -521,9 +520,9 @@ export default function AdminPage() {
             </div>
             <div className="topbar-title">고객 관리</div>
             <div className="view-switch">
-              <button className={view === 'members' ? 'view-btn active' : 'view-btn'} onClick={() => setView('members')}>회원</button>
-              <button className={view === 'questions' ? 'view-btn active' : 'view-btn'} onClick={() => setView('questions')}>질문</button>
-              <button className={view === 'system' ? 'view-btn active' : 'view-btn'} onClick={() => setView('system')}>시스템</button>
+              <button className={view === 'members' ? 'view-btn active' : 'view-btn'} onClick={() => showView('members')}>회원</button>
+              <button className={view === 'questions' ? 'view-btn active' : 'view-btn'} onClick={() => showView('questions')}>질문</button>
+              <button className={view === 'system' ? 'view-btn active' : 'view-btn'} onClick={() => showView('system')}>시스템</button>
             </div>
             <div className="spacer"></div>
             <span className="whoami">관리자</span>
@@ -571,13 +570,11 @@ export default function AdminPage() {
             ) : (
               <>
                 <div className="profile-card">
-                  <div className="profile-left">
+                  <div className="profile-head">
                     <div className="avatar-lg">{petEmoji(firstPet?.animal_category)}</div>
-                    <div>
+                    <div className="profile-who">
                       <div className="profile-name">
                         {selectedCustomer.name} <span className="cust-id">ID {selectedCustomer.user_id}</span>
-                        <button type="button" className="member-action" onClick={() => openMemberForm('edit')}>수정</button>
-                        <button type="button" className="member-action danger" onClick={withdrawMember}>탈퇴</button>
                       </div>
                       <div className="profile-tags">
                         {(selectedCustomer.pets || []).length === 0 ? (
@@ -587,23 +584,34 @@ export default function AdminPage() {
                         ))}
                       </div>
                     </div>
+                    <div className="profile-actions">
+                      <button type="button" className="member-action" onClick={() => openMemberForm('edit')}>수정</button>
+                      <button type="button" className="member-action danger" onClick={withdrawMember}>탈퇴</button>
+                    </div>
                   </div>
-                  <div className="profile-right">
-                    <span>이메일</span><b>{selectedCustomer.email ?? '-'}</b>
-                    <span>연락처</span><b>{selectedCustomer.phone ?? '-'}</b>
-                    <span>반려동물 나이</span><b>{ageLabel(firstPet?.birth_date)}</b>
-                    <span>가입일</span><b>{(selectedCustomer.created_at || '').slice(0, 10)}</b>
-                    <span>구매 건수</span><b>{(selectedCustomer.purchases || []).length}건</b>
-                    <span>총 구매액</span><b>{totalSpent.toLocaleString()}원</b>
-                    <span>성별</span><b>{genderLabel(firstPet?.gender)}</b>
-                    <span>체급</span><b>{sizeLabel(firstPet?.size)}</b>
-                    <span>몸무게</span><b>{firstPet?.weight_kg != null ? `${firstPet.weight_kg}kg` : '-'}</b>
-                    <span>중성화</span><b>{neuteredLabel(firstPet?.neutered)}</b>
-                    <span>활동량</span><b>{activityLabel(firstPet?.activity_level)}</b>
-                    <span>알러지</span><b>{firstPet?.allergies || '-'}</b>
-                    <span>식성</span><b>{firstPet?.diet_note ?? '-'}</b>
-                    <span>피부</span><b>{firstPet?.skin_note ?? '-'}</b>
-                  </div>
+
+                  {/* 라벨 위, 값 아래 타일. 회원 정보와 첫 번째 펫 정보를 나눠 보여준다 */}
+                  <div className="info-title">회원 정보</div>
+                  <dl className="info-grid">
+                    <div className="wide"><dt>이메일</dt><dd>{selectedCustomer.email ?? '-'}</dd></div>
+                    <div><dt>연락처</dt><dd>{selectedCustomer.phone ?? '-'}</dd></div>
+                    <div><dt>가입일</dt><dd>{(selectedCustomer.created_at || '').slice(0, 10)}</dd></div>
+                    <div><dt>구매 건수</dt><dd>{(selectedCustomer.purchases || []).length}건</dd></div>
+                    <div><dt>총 구매액</dt><dd>{totalSpent.toLocaleString()}원</dd></div>
+                  </dl>
+
+                  <div className="info-title">반려동물{firstPet ? ` · ${firstPet.name}` : ''}</div>
+                  <dl className="info-grid">
+                    <div><dt>나이</dt><dd>{ageLabel(firstPet?.birth_date)}</dd></div>
+                    <div><dt>성별</dt><dd>{genderLabel(firstPet?.gender)}</dd></div>
+                    <div><dt>체급</dt><dd>{sizeLabel(firstPet?.size)}</dd></div>
+                    <div><dt>몸무게</dt><dd>{firstPet?.weight_kg != null ? `${firstPet.weight_kg}kg` : '-'}</dd></div>
+                    <div><dt>중성화</dt><dd>{neuteredLabel(firstPet?.neutered)}</dd></div>
+                    <div><dt>활동량</dt><dd>{activityLabel(firstPet?.activity_level)}</dd></div>
+                    <div className="wide"><dt>알러지</dt><dd>{firstPet?.allergies || '-'}</dd></div>
+                    <div className="wide"><dt>식성</dt><dd>{firstPet?.diet_note ?? '-'}</dd></div>
+                    <div className="wide"><dt>피부</dt><dd>{firstPet?.skin_note ?? '-'}</dd></div>
+                  </dl>
                 </div>
 
                 <div className="section-title">구매 금액 추이</div>

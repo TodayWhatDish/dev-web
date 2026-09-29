@@ -205,23 +205,6 @@ export default function CustomerPage() {
     }
   }
 
-  // 페이지 열릴 때 딱 한 번: 로그인 유지. 배경 사진은 이제 customer.css에 정적으로 박혀있어
-  // (public/customer-bg.png) 따로 fetch할 게 없다.
-  useEffect(() => {
-    const token = localStorage.getItem('userToken') || '';
-    if (token) {
-      userTokenRef.current = token;
-      // localStorage는 마운트 후에만 읽을 수 있어서 이 setState는 여기서만 가능하다 (의도된 1회성 렌더 추가)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsLoggedIn(true);
-      loadMyProfile();
-    } else if (new URLSearchParams(window.location.search).has('poc')) {
-      handlePocLogin();
-    } else if (new URLSearchParams(window.location.search).has('login')) {
-      setLoginOpen(true);
-    }
-  }, []);
-
   // ---------------- 로그인/회원가입 ----------------
   function handleLoginClick() {
     if (isLoggedIn) {
@@ -277,6 +260,23 @@ export default function CustomerPage() {
     }
     setLoginSubmitting(false);
   }
+
+  // 페이지 열릴 때 딱 한 번: 로그인 유지. 배경 사진은 이제 customer.css에 정적으로 박혀있어
+  // (public/customer-bg.png) 따로 fetch할 게 없다.
+  useEffect(() => {
+    const token = localStorage.getItem('userToken') || '';
+    if (token) {
+      userTokenRef.current = token;
+      // localStorage는 마운트 후에만 읽을 수 있어서 이 setState는 여기서만 가능하다 (의도된 1회성 렌더 추가)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsLoggedIn(true);
+      loadMyProfile();
+    } else if (new URLSearchParams(window.location.search).has('poc')) {
+      handlePocLogin();
+    } else if (new URLSearchParams(window.location.search).has('login')) {
+      setLoginOpen(true);
+    }
+  }, []);
 
   // 알레르겐 목록은 GET /allergens에서 딱 한 번만 받아온다 - 회원가입 모달 열 때마다 다시 안 부른다
   async function loadAllergenOptions() {
