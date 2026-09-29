@@ -74,6 +74,8 @@
 }
 .site .nav-links a:hover { color: var(--cocoa); }
 .site .nav-links a[aria-current='page'] { color: var(--cocoa); font-weight: 700; }
+.site .nav-links a.nav-login { color: var(--cream); background: var(--cocoa); padding: 8px 18px; border-radius: 999px; }
+.site .nav-links a.nav-login:hover { background: var(--pink-deep); }
 
 /* ── 버튼 ────────────────────────────────────── */
 .site .btn {

@@ -10,6 +10,14 @@ import "./customer.css";
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const QUOTA_MAX = 5;
 
+// !res.ok 응답의 detail을 화면 문구로 바꾼다. 422(pydantic)는 detail이 배열이라 msg만 모은다.
+async function errorDetail(res, fallback) {
+  const err = await res.json().catch(() => ({}));
+  if (typeof err.detail === 'string') return err.detail;
+  if (Array.isArray(err.detail)) return err.detail.map((d) => d.msg).join(', ') || fallback;
+  return fallback;
+}
+
 // 상품별 실사진은 없어서(백엔드가 productType을 사료/간식 두 갈래로만 내려줌 - domain/products.py 참고)
 // 카테고리 대표 사진 몇 장을 상품 ID 기준으로 고정 배정한다. 새로고침해도 같은 상품은 항상 같은 사진.
 const PRODUCT_IMAGES = {
@@ -42,27 +50,47 @@ function petDetailRows(p) {
   ].filter(([, v]) => v);
 }
 
-// 재구조화안 그대로 보리/나비 두 마리, 카드 3장을 기본값(목업)으로 둔다.
-// 로그인해서 실제 데이터(GET /me/profile, /me/recommend)가 오면 이 값을 통째로 갈아끼운다.
-const DEFAULT_PETS = [
-  { name: '보리', species: '강아지', emoji: '🐶' },
-  { name: '나비', species: '고양이', emoji: '🐱' },
-];
+// 비로그인 화면용 예시 카드 3장. 화면에 '예시'라고 분명히 적는다 - 진짜 추천으로 오해하면 안 된다.
+// 로그인해서 실제 데이터(GET /me/recommend)가 오면 이 값을 통째로 갈아끼운다.
 const DEFAULT_CARDS = [
   { key: 'mock-1', emoji: '🍖', brand: '그레인프리 키친', name: '연어 & 고구마 건식 사료', review: '소형견인데도 알갱이가 작아서 잘 먹어요. 냄새도 안 나고 변 상태도 좋아졌어요.', price: 32900, score: 0.91, productType: '사료', productId: null, bought: false },
   { key: 'mock-2', emoji: '🐟', brand: '퓨어펫', name: '화식 트릿 (닭가슴살)', review: '산책 훈련용으로 딱이에요. 크기도 작고 손에 안 묻어서 편해요.', price: 9900, score: 0.88, productType: '간식', productId: null, bought: false },
   { key: 'mock-3', emoji: '🥕', brand: '냥이부엌', name: '수제 동결건조 큐브', review: '알레르기 있는 고양이인데 반응 하나도 없었어요. 향도 좋아하네요.', price: 14500, score: 0.85, productType: '간식', productId: null, bought: false },
 ];
 
+// /me/recommend의 found와 /ask/me의 sources는 같은 candidates() 결과라 한 함수로 카드로 바꾼다
+function toCard(p) {
+  return {
+    key: p.product_id, emoji: '🐾', brand: p.brand, name: p.name,
+    // 검색용 청크는 '상품명 (목적) 주원료: … 별점 N점 후기: 본문' 모양이라 화면엔 후기 본문만
+    review: String(p.review ?? '').split('후기:').pop().trim(),
+    price: p.price_krw, score: p.score, productType: p.product_type || null,
+    productId: p.product_id, bought: false,
+  };
+}
+
+// 추천 필터(services/profile.pet_profile)가 실제로 쓰는 값만 칩으로 보여준다: 종·체구·알레르기 + 설문 검색어
+function basisChips(pet, query) {
+  if (!pet) return [];
+  return [
+    pet.species,
+    SIZE_LABELS[pet.size],
+    pet.allergies && `${pet.allergies} 제외`,
+    query && query !== '사료나 간식 추천해줘' && `“${query}”`,
+  ].filter(Boolean);
+}
+
 export default function CustomerPage() {
   // ---------------- 상태: 화면에 보이는 걸 결정하는 값은 전부 useState로 ----------------
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [profile, setProfile] = useState(null); // { name, email, phone, region } - GET /me/profile
-  const [pets, setPets] = useState(DEFAULT_PETS);
+  const [pets, setPets] = useState([]);
   const [expandedPet, setExpandedPet] = useState(null); // 펫 핀 눌러서 상세 펼친 인덱스, null이면 접힘
   const [purchases, setPurchases] = useState([]);
   const [cards, setCards] = useState(DEFAULT_CARDS);
   const [cardsLoading, setCardsLoading] = useState(false);
+  // 지금 카드가 무엇 기준인지: null = 예시, { query } = 프로필 기준, { question } = AI 질문 기준
+  const [recoBasis, setRecoBasis] = useState(null);
   const [activeTab, setActiveTab] = useState('pets');
   const [quotaUsed, setQuotaUsed] = useState(0);
   const [infoOpen, setInfoOpen] = useState(false); // "어떻게 고르나요?" 안내 모달
@@ -90,13 +118,38 @@ export default function CustomerPage() {
   // ---------------- ref: 화면엔 안 보이지만 값을 들고 있어야 하는 것들 ----------------
   // userToken은 렌더링에 직접 쓰이지 않아서(헤더에만 넣음) state 대신 ref로 둔다 - 바뀌어도 재렌더링 필요 없음
   const userTokenRef = useRef('');
+  const [recoOpen, setRecoOpen] = useState(false); // 추천 결과 모달 - 추천이 새로 오면 열린다
   const cardsSectionRef = useRef(null); // 질문 답변 오면 이 위치로 스크롤
+
+  // 로그아웃 = 로그인 전 화면으로 되돌리기. 토큰만 지우면 이전 회원의 프로필·구매이력·답변이 화면에 남는다.
+  // 버튼 로그아웃과 /me/* 401(토큰 만료) 둘 다 여기로 온다.
+  function logout() {
+    userTokenRef.current = '';
+    localStorage.removeItem('userToken');
+    setIsLoggedIn(false);
+    setProfile(null);
+    setPets([]);
+    setExpandedPet(null);
+    setPurchases([]);
+    setCards(DEFAULT_CARDS);
+    setRecoBasis(null);
+    setCardsLoading(false);
+    setActiveTab('pets');
+    setQuotaUsed(0);
+    setReviewIndex(null);
+    setReviewError('');
+    setAskAnswer('');
+    setAskAnswerVisible(false);
+    setAskSources([]);
+    setLoadError('');
+  }
 
   // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
   // (customer_detail() 재사용 - app/api/routes/auth.py 참고).
   async function loadMyProfile() {
     try {
       const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (res.ok) {
         const d = await res.json();
         setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region });
@@ -117,6 +170,7 @@ export default function CustomerPage() {
   async function loadMyPurchases() {
     try {
       const res = await fetch(`${API}/me/purchases`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (res.ok) {
         const rows = await res.json();
         setPurchases(rows.map((p) => ({ purchase_id: p.purchase_id, name: p.product_name, reviewed: p.rating != null })));
@@ -130,13 +184,12 @@ export default function CustomerPage() {
     setCardsLoading(true);
     try {
       const res = await fetch(`${API}/me/recommend`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
+      if (res.status === 401) { logout(); return; }
       if (!res.ok) { setCards([]); setLoadError('추천을 불러오지 못했습니다.'); return; }
-      const { found } = await res.json();
-      setCards(found && found.length ? found.map((p) => ({
-        key: p.product_id, emoji: '🐾', brand: p.brand, name: p.name, review: p.review,
-        price: p.price_krw, score: p.score, productType: p.product_type || null,
-        productId: p.product_id, bought: false,
-      })) : []);
+      const { found, query } = await res.json();
+      setCards((found || []).map(toCard));
+      setRecoBasis({ query });
+      if (found?.length) setRecoOpen(true);
     } catch { 
       setCards([]);
       setLoadError('추천을 불러오지 못했습니다.');
@@ -155,15 +208,17 @@ export default function CustomerPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoggedIn(true);
       loadMyProfile();
+    } else if (new URLSearchParams(window.location.search).has('poc')) {
+      handlePocLogin();
+    } else if (new URLSearchParams(window.location.search).has('login')) {
+      setLoginOpen(true);
     }
   }, []);
 
   // ---------------- 로그인/회원가입 ----------------
   function handleLoginClick() {
     if (isLoggedIn) {
-      userTokenRef.current = '';
-      localStorage.removeItem('userToken');
-      setIsLoggedIn(false);
+      logout();
       return;
     }
     setLoginError('');
@@ -190,12 +245,30 @@ export default function CustomerPage() {
       setLoginError(err.detail || '로그인에 실패했습니다.');
       return;
     }
-    const { access_token } = await res.json();
-    userTokenRef.current = access_token;
-    localStorage.setItem('userToken', access_token);
+    startSession((await res.json()).access_token);
+  }
+
+  function startSession(token) {
+    userTokenRef.current = token;
+    localStorage.setItem('userToken', token);
     setLoginOpen(false);
     setIsLoggedIn(true);
     loadMyProfile();
+  }
+
+  // 시연용: 서버가 펫·알레르기·구매후기까지 채운 새 계정을 만들어 토큰을 준다 (POST /poc/login)
+  async function handlePocLogin() {
+    setLoginError('');
+    setLoginSubmitting(true);
+    try {
+      const res = await fetch(`${API}/poc/login`, { method: 'POST' });
+      if (!res.ok) throw new Error();
+      startSession((await res.json()).access_token);
+    } catch {
+      setLoginOpen(true);
+      setLoginError('POC 모드를 시작할 수 없습니다.');
+    }
+    setLoginSubmitting(false);
   }
 
   // 알레르겐 목록은 GET /allergens에서 딱 한 번만 받아온다 - 회원가입 모달 열 때마다 다시 안 부른다
@@ -280,6 +353,7 @@ export default function CustomerPage() {
       setReviewError('서버에 연결할 수 없습니다.');
       return;
     }
+    if (res.status === 401) { logout(); return; }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       setReviewError(err.detail || '리뷰 등록에 실패했습니다.');
@@ -305,6 +379,7 @@ export default function CustomerPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
         body: JSON.stringify({ product_id: Number(card.productId) }),
       });
+      if (res.status === 401) { logout(); return; }
       if (!res.ok) return;
     } catch { return; }
     loadMyPurchases();
@@ -336,7 +411,13 @@ export default function CustomerPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
         body: JSON.stringify({ user_query: question }),
       });
-      if (res.status === 401) { setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.'); return; }
+      if (res.status === 401) {
+        logout();
+        setAskAnswerVisible(true);
+        setAskAnswer('로그인이 만료됐어요. 다시 로그인해주세요.');
+        return;
+      }
+      if (!res.ok) { setAskAnswer(await errorDetail(res, '질문을 처리하지 못했습니다.')); return; }
       if (!res.body) { setAskAnswer('응답을 받지 못했습니다.'); return; }
 
       // NDJSON을 줄 단위로 읽는다 - 네트워크 조각이 줄 한가운데를 자를 수 있어 buffer가 꼭 필요하다
@@ -356,7 +437,12 @@ export default function CustomerPage() {
             if (chunk.type === 'delta') {
               if (!answering) { setAskAnswer(''); answering = true; }
               setAskAnswer((prev) => prev + chunk.text);
-            } else if (chunk.type === 'sources') setAskSources(chunk.sources || []);
+            } else if (chunk.type === 'sources') {
+              setAskSources(chunk.sources || []);
+              setCards((chunk.sources || []).map(toCard));
+              setRecoBasis({ question });
+              if (chunk.sources?.length) setRecoOpen(true);
+            }
             else if (chunk.type === 'error') setAskAnswer(chunk.message);
           } catch { /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
         }
@@ -401,7 +487,7 @@ export default function CustomerPage() {
             <div className="pill-scroll">
               {activeTab === 'pets' ? (
                 pets.length === 0
-                  ? <span className="empty-msg">등록된 반려동물이 없어요.</span>
+                  ? <span className="empty-msg">{isLoggedIn ? '등록된 반려동물이 없어요.' : '로그인하면 우리 아이 정보가 보여요.'}</span>
                   : pets.map((p, i) => (
                     <div
                       className={expandedPet === i ? 'pet-pill active' : 'pet-pill'}
@@ -456,7 +542,7 @@ export default function CustomerPage() {
             <h1>우리 아이 오늘 한 끼,<br />근거 있는 <span className="hl">후기</span>로 골라요.</h1>
             <p>실제로 산 사람들의 후기에서 찾은 근거만 보여드려요. 축종·체구·알레르기까지 우리 아이 프로필에 맞춰 걸러낸 사료와 간식이에요.</p>
             <div className="hero-actions">
-              <button type="button" className="btn-cta" onClick={() => cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>오늘의 추천 보러가기 →</button>
+              <button type="button" className="btn-cta" onClick={() => (isLoggedIn && cards.length ? setRecoOpen(true) : cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }))}>오늘의 추천 보러가기 →</button>
               <button type="button" className="link-quiet" onClick={() => setInfoOpen(true)}>어떻게 고르나요?</button>
             </div>
           </div>
@@ -484,7 +570,7 @@ export default function CustomerPage() {
               <div className="ai-sources">
                 {askSources.slice(0, 3).map((s, i) => (
                   <div className="ai-source-item" key={i}>
-                    {s.name} ({s.brand}){s.product_type && <> · <span className="badge-type">{s.product_type}</span></>} · 유사도 {s.score.toFixed(3)}
+                    {s.name} ({s.brand}){s.product_type && <> · <span className="badge-type">{s.product_type}</span></>} · 매칭 {Math.round(s.score * 100)}%
                   </div>
                 ))}
               </div>
@@ -493,30 +579,97 @@ export default function CustomerPage() {
         </div>
 
         <div className="section-title" ref={cardsSectionRef}>
-          <h2>오늘의 추천</h2>
-          <span>우리 아이 프로필 기준 · 실제 후기 근거</span>
+          <h2>
+            {!isLoggedIn ? '이런 추천을 받게 돼요'
+              : recoBasis?.question ? `“${recoBasis.question}” 질문으로 찾은 상품`
+              : `${pets[0]?.name ?? '우리 아이'} 맞춤 추천`}
+          </h2>
+          <span>{isLoggedIn ? '실제 구매 후기가 근거예요 · 매칭도가 높은 순' : '아래 카드는 예시예요'}</span>
         </div>
+
+        {!isLoggedIn ? (
+          <div className="reco-basis">
+            <span>로그인하면 우리 아이의 종·체구·알레르기에 맞춘 추천으로 바뀌어요.</span>
+            <button type="button" className="btn btn-solid" onClick={handleLoginClick}>로그인</button>
+            <button type="button" className="btn btn-ghost" onClick={handleSignupClick}>회원가입</button>
+            <button type="button" className="btn btn-ghost" onClick={handlePocLogin} disabled={loginSubmitting}>POC 모드로 시작하기</button>
+          </div>
+        ) : recoBasis?.question ? (
+          <div className="reco-basis">
+            <span>AI 답변에 쓰인 근거 상품이에요.</span>
+            <button type="button" className="btn btn-ghost" onClick={loadMyRecommend}>{pets[0]?.name ?? '우리 아이'} 맞춤 추천으로 돌아가기</button>
+          </div>
+        ) : basisChips(pets[0], recoBasis?.query).length > 0 && (
+          <div className="reco-basis">
+            <span>이 조건으로 골랐어요</span>
+            {basisChips(pets[0], recoBasis?.query).map((c) => <span className="chip" key={c}>{c}</span>)}
+          </div>
+        )}
+
         <div className="cards">
           {cardsLoading
             ? [0, 1, 2].map((i) => <div className="card-skeleton" key={i} />)
-            : cards.map((c) => (
-              <div className="card" key={c.key}>
+            : isLoggedIn && cards.length === 0
+              ? <p className="empty-msg">조건에 맞는 상품을 찾지 못했어요. AI 질문창에 원하는 걸 적어 보세요.</p>
+              : cards.map((c, i) => (
+              <div className={isLoggedIn ? 'card' : 'card is-sample'} key={c.key}>
+                {isLoggedIn ? <span className="rank">추천 {i + 1}</span> : <span className="rank">예시</span>}
                 <div className="card-thumb">
                   {pickProductImage(c) ? <img src={pickProductImage(c)} alt={c.name} /> : c.emoji}
                 </div>
                 <div className="brand">{c.brand}</div>
                 {c.productType && <span className="badge-type">{c.productType}</span>}
                 <div className="name">{c.name}</div>
+                <div className="review-label">추천 근거가 된 후기</div>
                 <div className="review">&quot;{c.review}&quot;</div>
                 <div className="card-foot">
                   <span className="price">{c.price.toLocaleString()}원</span>
-                  <span className="badge-score">유사도 {c.score.toFixed(2)}</span>
+                  <span className="badge-score">매칭 {Math.round(c.score * 100)}%</span>
                 </div>
                 <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought}>
                   {c.bought ? '구매 완료 ✓' : '구매하기'}
                 </button>
               </div>
             ))}
+        </div>
+      </div>
+
+      <div className="modal-overlay" hidden={!recoOpen} onClick={(e) => e.target === e.currentTarget && setRecoOpen(false)}>
+        <div className="modal-box reco-modal">
+          <div className="reco-modal-head">
+            <span className="reco-modal-kicker">{recoBasis?.question ? 'AI 답변 근거 상품' : '오늘의 추천'}</span>
+            <h3>{recoBasis?.question ? `“${recoBasis.question}”` : `${pets[0]?.name ?? '우리 아이'}를 위한 추천 ${Math.min(cards.length, 3)}가지`}</h3>
+            {!recoBasis?.question && basisChips(pets[0], recoBasis?.query).length > 0 && (
+              <div className="reco-modal-chips">
+                {basisChips(pets[0], recoBasis?.query).map((c) => <span className="chip" key={c}>{c}</span>)}
+              </div>
+            )}
+          </div>
+          <ol className="reco-list">
+            {cards.slice(0, 3).map((c, i) => (
+              <li className="reco-item" key={c.key}>
+                <span className="reco-rank">{i + 1}</span>
+                <div className="reco-thumb">
+                  {pickProductImage(c) ? <img src={pickProductImage(c)} alt={c.name} /> : c.emoji}
+                </div>
+                <div className="reco-body">
+                  <div className="reco-name"><span className="brand">{c.brand}</span> {c.name}</div>
+                  <p className="reco-review">&quot;{c.review}&quot;</p>
+                  <div className="reco-meta">
+                    <span className="price">{c.price.toLocaleString()}원</span>
+                    <span className="reco-match"><i style={{ width: `${Math.round(c.score * 100)}%` }} />매칭 {Math.round(c.score * 100)}%</span>
+                  </div>
+                </div>
+                <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought}>
+                  {c.bought ? '구매 완료 ✓' : '구매하기'}
+                </button>
+              </li>
+            ))}
+          </ol>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => { setRecoOpen(false); cardsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>전체 추천 보기</button>
+            <button type="button" className="btn btn-solid" onClick={() => setRecoOpen(false)}>닫기</button>
+          </div>
         </div>
       </div>
 
@@ -544,6 +697,8 @@ export default function CustomerPage() {
               </button>
             </div>
           </form>
+          <button type="button" className="btn btn-ghost poc-btn" onClick={handlePocLogin} disabled={loginSubmitting}>POC 모드로 시작하기</button>
+          <p className="poc-hint">가입 없이 시연용 반려동물·구매 후기 자료로 둘러봅니다.</p>
         </div>
       </div>
 
