@@ -662,7 +662,7 @@ export default function AdminPage() {
               <h3>{isAdd ? '회원 추가' : `${c.name} 회원 수정`}</h3>
               <div className="member-grid">
                 <label>이름*<input name="name" required defaultValue={c.name ?? ''} /></label>
-                <label>이메일*<input name="email" type="email" required defaultValue={c.email ?? ''} /></label>
+                <label>이메일*<input name="email" type="email" required pattern="[^@\s]+@[^@\s]+\.[^@\s]+" title="예: name@example.com" defaultValue={c.email ?? ''} /></label>
                 {isAdd && <label>비밀번호*<input name="password" type="password" required /></label>}
                 <label>연락처<input name="phone" defaultValue={c.phone ?? ''} /></label>
                 <label>지역<input name="region" defaultValue={c.region ?? ''} /></label>
@@ -676,8 +676,8 @@ export default function AdminPage() {
                       <label>종<select name="pet_species" defaultValue="개"><option value="개">강아지</option><option value="고양이">고양이</option></select></label>
                     )}
                     <label>성별<select name="pet_gender" defaultValue={p.gender ?? ''}><option value="">-</option><option value="M">수컷</option><option value="F">암컷</option></select></label>
-                    <label>생일<input name="pet_birth_date" type="date" defaultValue={(p.birth_date ?? '').slice(0, 10)} /></label>
-                    <label>체중(kg)<input name="pet_weight_kg" type="number" step="0.1" min="0.1" defaultValue={p.weight_kg ?? ''} /></label>
+                    <label>생일<input name="pet_birth_date" type="date" min="1990-01-01" max={new Date().toISOString().slice(0, 10)} defaultValue={(p.birth_date ?? '').slice(0, 10)} /></label>
+                    <label>체중(kg)<input name="pet_weight_kg" type="number" step="0.1" min="0.1" max="150" defaultValue={p.weight_kg ?? ''} /></label>
                     <label>체급<select name="pet_size" defaultValue={p.size ?? ''}><option value="">-</option>{[1, 2, 3, 4, 5].map((v) => <option key={v} value={v}>{sizeLabel(v)}</option>)}</select></label>
                     <label>활동량<select name="pet_activity_level" defaultValue={p.activity_level ?? ''}><option value="">-</option>{[1, 2, 3].map((v) => <option key={v} value={v}>{activityLabel(v)}</option>)}</select></label>
                     {!isAdd && (

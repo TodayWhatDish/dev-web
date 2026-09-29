@@ -662,7 +662,7 @@ export default function CustomerPage() {
         <div className="modal-box">
           <h3>회원가입</h3>
           <form onSubmit={handleSignupSubmit}>
-            <input type="email" name="email" placeholder="이메일" required />
+            <input type="email" name="email" placeholder="이메일" required pattern="[^@\s]+@[^@\s]+\.[^@\s]+" title="예: name@example.com" />
             <input type="password" name="password" placeholder="비밀번호" required />
             <input type="text" name="name" placeholder="이름" required />
             <input type="tel" name="phone" placeholder="연락처 (선택)" />
@@ -689,12 +689,12 @@ export default function CustomerPage() {
 
             <div className="qa-block">
               <span className="qa-label">태어난 날짜는 언제인가요? (선택)</span>
-              <input type="date" name="pet_birth_date" />
+              <input type="date" name="pet_birth_date" min="1990-01-01" max={new Date().toISOString().slice(0, 10)} />
             </div>
 
             <div className="qa-block">
               <span className="qa-label">체중은 몇 kg인가요? (선택)</span>
-              <input type="number" name="pet_weight_kg" placeholder="예: 4.5" step="0.1" min="0" />
+              <input type="number" name="pet_weight_kg" placeholder="예: 4.5" step="0.1" min="0.1" max="150" />
             </div>
 
             <div className="qa-block">
