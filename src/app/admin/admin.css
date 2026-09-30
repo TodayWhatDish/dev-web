@@ -161,10 +161,11 @@ table.purchases th.sortable:hover { color: var(--accent); }
 
 .ai-panel {
   position: fixed; top: 0; right: 0; height: 100vh; width: 420px; max-width: 92vw; background: var(--panel);
-  box-shadow: -8px 0 30px rgba(0,0,0,0.12); transform: translateX(100%); transition: transform .25s ease;
+  transform: translateX(100%); transition: transform .25s ease;
   z-index: 11; display: flex; flex-direction: column;
 }
-.ai-panel.open { transform: translateX(0); }
+/* 그림자는 열렸을 때만 - 닫혀서 화면 밖에 있어도 그림자가 오른쪽 끝에 번져 보인다 */
+.ai-panel.open { transform: translateX(0); box-shadow: -8px 0 30px rgba(0,0,0,0.12); }
 .ai-panel-header { padding: 22px 24px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: flex-start; }
 .ai-panel-header h2 { font-family: 'Jua', sans-serif; font-size: 18px; margin: 0 0 4px; color: var(--accent); }
 .ai-panel-header p { margin: 0; font-size: 13px; color: var(--muted); }
@@ -201,6 +202,33 @@ table.purchases th.sortable:hover { color: var(--accent); }
 .member-note { font-size: 13px; color: var(--muted); margin-top: 14px; }
 .member-error { color: #c0392b; font-size: 13px; min-height: 18px; margin-top: 12px; }
 .member-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+
+/* 폰: 사이드바(260px)·검색창(320px) 고정 너비가 화면을 넘으므로 위→아래 한 줄로 쌓는다.
+   dvh 는 주소창이 접혔다 펴져도 화면 높이에 맞는 단위 */
+@media (max-width: 760px) {
+  #loginGate { height: 100dvh; padding: 0 16px; }
+  #loginGate .login-card { width: 100%; max-width: 340px; padding: 32px 24px; }
+  #loginGate input { width: 100%; }
+
+  .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; height: 100dvh; }
+  .topbar { grid-column: 1; flex-wrap: wrap; gap: 8px 10px; padding: 10px 14px; }
+  .topbar .spacer, .whoami { display: none; }
+  .view-switch { margin-left: 0; }
+  .logout-link { margin: 0 0 0 auto; }
+  .search-wrap { order: 1; width: 100%; } /* 검색창은 맨 아랫줄 전체 폭 */
+  .sidebar { max-height: 32dvh; }
+  .main, .full-view { padding: 18px 14px 40px; }
+  .full-view { grid-column: 1; grid-row: 2 / 4; }
+
+  .profile-card { padding: 18px 16px; }
+  .profile-head { flex-wrap: wrap; }
+  table.purchases th, table.purchases td { padding: 10px 8px; font-size: 12.5px; }
+  .member-grid { grid-template-columns: 1fr; }
+  .ai-panel { height: 100dvh; }
+
+  /* 아이폰은 16px 보다 작은 입력칸을 누르면 화면을 확대해 버린다 */
+  #loginGate input, .search-wrap input, .member-grid input, .member-grid select { font-size: 16px; }
+}
 }
 
 @keyframes riseIn {
