@@ -128,6 +128,8 @@ export default function CustomerPage() {
   const userTokenRef = useRef('');
   const [recoOpen, setRecoOpen] = useState(false); // 추천 결과 모달 - 추천이 새로 오면 열린다
   const cardsSectionRef = useRef(null); // 질문 답변 오면 이 위치로 스크롤
+  // 프로필 기준(로그인 시) 추천을 기억해 둔다 - 관련 상품 없는 질문 뒤에 이걸로 되돌려, 직전 질문 카드가 남지 않게
+  const profileRecoRef = useRef({ cards: DEFAULT_CARDS, query: null });
 
   // 로그아웃 = 로그인 전 화면으로 되돌리기. 토큰만 지우면 이전 회원의 프로필·구매이력·답변이 화면에 남는다.
   // 버튼 로그아웃과 /me/* 401(토큰 만료) 둘 다 여기로 온다.
@@ -202,8 +204,10 @@ export default function CustomerPage() {
       if (res.status === 401) { logout(); return; }
       if (!res.ok) { setCards([]); setLoadError('추천을 불러오지 못했습니다.'); return; }
       const { found, query } = await res.json();
-      setCards((found || []).map(toCard));
+      const profileCards = (found || []).map(toCard);
+      setCards(profileCards);
       setRecoBasis({ query });
+      profileRecoRef.current = { cards: profileCards, query }; // 질문이 상품을 못 찾을 때 되돌릴 기준 추천
       if (found?.length) setRecoOpen(true);
     } catch { 
       setCards([]);
@@ -518,11 +522,16 @@ export default function CustomerPage() {
               setAskAnswer((prev) => prev + chunk.text);
             } else if (chunk.type === 'sources') {
               setAskSources(chunk.sources || []);
-              // 관련 상품이 없는 질문(날씨 등)이면 빈 목록이 온다 - 보던 추천 카드는 그대로 둔다
               if (chunk.sources?.length) {
                 setCards(chunk.sources.map(toCard));
                 setRecoBasis({ question });
                 setRecoOpen(true);
+              } else {
+                // 관련 상품이 없는 질문(날씨·다른 사람 얘기 등) - 직전 질문의 '근거 상품'이 이 질문 것처럼
+                // 남지 않게 프로필 기준 추천으로 되돌리고 모달은 닫는다
+                setCards(profileRecoRef.current.cards);
+                setRecoBasis(profileRecoRef.current.query != null ? { query: profileRecoRef.current.query } : null);
+                setRecoOpen(false);
               }
             }
             // 반증(verification)은 관리자 화면 전용 QA 신호라 고객에겐 보여주지 않는다 - 여기선 받고 버린다.
