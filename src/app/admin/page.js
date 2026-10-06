@@ -74,6 +74,7 @@ export default function AdminPage() {
   const [askVerify, setAskVerify] = useState('');
   const [askError, setAskError] = useState('');
   const [asking, setAsking] = useState(false);
+  const [loadingCustomerId, setLoadingCustomerId] = useState(null); // 선택해서 상세 불러오는 중인 고객 - 클릭 즉시 행 강조 + 상세 스피너
 
   const [questions, setQuestions] = useState([]);
   const [questionsLoading, setQuestionsLoading] = useState(false);
@@ -212,9 +213,11 @@ export default function AdminPage() {
   }
 
   async function selectCustomer(userId) {
+    setLoadingCustomerId(userId); // 클릭 즉시 그 행을 활성/로딩으로 표시 (응답 기다리는 ~1초 동안 멈춘 듯 안 보이게)
     try {
       setSelectedCustomer(await getCustomerInfo(userId));
     } catch { /* 401은 showLoginGate가 처리 */ }
+    finally { setLoadingCustomerId(null); }
   }
 
   // ---- 회원 추가/수정/탈퇴: POST·PATCH·DELETE /api/customers ----
@@ -550,7 +553,7 @@ export default function AdminPage() {
               ) : filteredCustomers.map((c) => (
                 <div
                   key={c.user_id}
-                  className={selectedCustomer?.user_id === c.user_id ? 'customer-item active' : 'customer-item'}
+                  className={(selectedCustomer?.user_id === c.user_id || loadingCustomerId === c.user_id) ? 'customer-item active' : 'customer-item'}
                   onClick={() => selectCustomer(c.user_id)}
                 >
                   <div className="avatar">{(c.name || '?')[0]}</div>
@@ -564,7 +567,9 @@ export default function AdminPage() {
           </div>
 
           <div className="main" hidden={view !== 'members'}>
-            {!selectedCustomer ? (
+            {loadingCustomerId && selectedCustomer?.user_id !== loadingCustomerId ? (
+              <div className="ai-loading" style={{ height: 'auto', padding: '10px 0' }}><div className="spinner"></div>고객 정보 불러오는 중...</div>
+            ) : !selectedCustomer ? (
               <div className="empty-state">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.6" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                 <div>왼쪽 목록에서 고객을 선택하면<br />상세정보와 구매 이력이 표시됩니다.</div>
