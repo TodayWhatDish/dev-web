@@ -104,6 +104,11 @@ export default function CustomerPage() {
   const [signupOpen, setSignupOpen] = useState(false);
   const [signupError, setSignupError] = useState('');
   const [signupSubmitting, setSignupSubmitting] = useState(false);
+
+  const [editOpen, setEditOpen] = useState(false); // "내 정보 수정" 모달
+  const [editError, setEditError] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editPetIdx, setEditPetIdx] = useState(0); // 수정 모달에서 고른 펫 (여러 마리면 드롭다운으로 바꾼다)
   const [allergenOptions, setAllergenOptions] = useState([]);
   const [allergensLoaded, setAllergensLoaded] = useState(false);
 
@@ -161,6 +166,7 @@ export default function CustomerPage() {
         const d = await res.json();
         setProfile({ name: d.name, email: d.email, phone: d.phone, region: d.region, credit: d.credit_krw });
         setPets(d.pets.map((p) => ({
+          petId: p.pet_id, // 정보 수정(PATCH /me/profile)에서 어느 펫을 고칠지 서버에 넘길 때 쓴다
           name: p.name, species: p.animal_category, emoji: p.animal_category === '고양이' ? '🐱' : '🐶',
           gender: p.gender, birthDate: p.birth_date, weightKg: p.weight_kg,
           size: p.size, activityLevel: p.activity_level, dietNote: p.diet_note,
@@ -343,6 +349,66 @@ export default function CustomerPage() {
     loadMyProfile();
   }
 
+  // ---------------- 내 정보 수정 ----------------
+  function handleEditClick() {
+    setEditError('');
+    setEditPetIdx(0);
+    loadAllergenOptions(); // 알러지 체크박스 - 회원가입과 같은 목록을 쓴다
+    setEditOpen(true);
+  }
+
+  async function handleEditSubmit(e) {
+    e.preventDefault();
+    setEditError('');
+    const fd = new FormData(e.currentTarget);
+    const num = (key) => (fd.get(key) ? Number(fd.get(key)) : null);
+    // 이름/펫이름은 required 입력이라 비어서 오지 않는다. 나머지는 비우면 null = 해당 값 지우기.
+    const body = {
+      name: fd.get('name'),
+      phone: fd.get('phone') || null,
+      region: fd.get('region') || null,
+    };
+    // 펫이 있을 때만 펫 필드를 보낸다. pet_id 를 함께 넘겨 서버가 '이 회원의 이 펫'만 고치게 한다(남의 펫은 서버가 막는다).
+    const editPet = pets[editPetIdx];
+    if (editPet) {
+      Object.assign(body, {
+        pet_id: editPet.petId,
+        pet_name: fd.get('pet_name'),
+        pet_gender: fd.get('pet_gender') || null,
+        pet_birth_date: fd.get('pet_birth_date') || null,
+        pet_weight_kg: fd.get('pet_weight_kg') ? Number(fd.get('pet_weight_kg')) : null,
+        pet_size: num('pet_size'),
+        pet_activity_level: num('pet_activity_level'),
+        pet_allergies: fd.getAll('pet_allergies'),
+        diet_note: fd.get('diet_note') || null,
+        skin_note: fd.get('skin_note') || null,
+      });
+    }
+
+    setEditSubmitting(true);
+    let res;
+    try {
+      res = await fetch(`${API}/me/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userTokenRef.current}` },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      setEditError('서버에 연결할 수 없습니다.');
+      setEditSubmitting(false);
+      return;
+    }
+    setEditSubmitting(false);
+    if (res.status === 401) { logout(); return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setEditError(err.detail || '정보 수정에 실패했습니다.');
+      return;
+    }
+    setEditOpen(false);
+    loadMyProfile(); // 서버에 저장된 값으로 화면을 다시 채운다
+  }
+
   // ---------------- 리뷰 남기기 ----------------
   async function handleReviewSubmit(e, i) {
     e.preventDefault();
@@ -495,7 +561,10 @@ export default function CustomerPage() {
           <div className="side-panel-body">
             {profile && (
               <div className="profile-info">
-                <div className="profile-name">{profile.name}</div>
+                <div className="profile-name">
+                  {profile.name}
+                  <button type="button" className="profile-edit-btn" onClick={handleEditClick}>정보 수정</button>
+                </div>
                 <div className="profile-meta">{profile.email}{profile.phone && ` · ${profile.phone}`}{profile.region && ` · ${profile.region}`}</div>
               </div>
             )}
@@ -812,6 +881,100 @@ export default function CustomerPage() {
               <button type="button" className="btn btn-ghost" onClick={() => setSignupOpen(false)}>취소</button>
               <button type="submit" className="btn btn-solid" disabled={signupSubmitting}>
                 {signupSubmitting ? <span className="spinner" /> : '가입하기'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* ===== 내 정보 수정 모달 ===== 회원가입 폼과 같은 모양, 이메일/비밀번호는 빼고 현재 값으로 채운다.
+          펫을 바꾸면(key=editPetIdx) 폼을 다시 그려서 그 펫 값으로 채운다. 종(강아지/고양이)은 수정 대상이 아니다. */}
+      <div className="modal-overlay" hidden={!editOpen}>
+        <div className="modal-box">
+          <h3>내 정보 수정</h3>
+          <form key={editPetIdx} onSubmit={handleEditSubmit}>
+            <input type="text" name="name" placeholder="이름" defaultValue={profile?.name || ''} required />
+            <input type="tel" name="phone" placeholder="연락처 (선택)" defaultValue={profile?.phone || ''} />
+            <select name="region" defaultValue={profile?.region || ''}>
+              <option value="">지역 (선택)</option>
+              {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+
+            {pets.length > 0 && <>
+              <hr />
+              {pets.length > 1 && (
+                <select value={editPetIdx} onChange={(e) => setEditPetIdx(Number(e.target.value))}>
+                  {pets.map((p, i) => <option key={i} value={i}>{p.name}</option>)}
+                </select>
+              )}
+              <input type="text" name="pet_name" placeholder="반려동물 이름" defaultValue={pets[editPetIdx]?.name || ''} required />
+
+              <div className="qa-block">
+                <span className="qa-label">성별이 어떻게 되나요? (선택)</span>
+                <select name="pet_gender" defaultValue={pets[editPetIdx]?.gender || ''}>
+                  <option value="">선택 안 함</option>
+                  <option value="M">수컷</option>
+                  <option value="F">암컷</option>
+                </select>
+              </div>
+
+              <div className="qa-block">
+                <span className="qa-label">태어난 날짜는 언제인가요? (선택)</span>
+                <input type="date" name="pet_birth_date" defaultValue={pets[editPetIdx]?.birthDate || ''} />
+              </div>
+
+              <div className="qa-block">
+                <span className="qa-label">체중은 몇 kg인가요? (선택)</span>
+                <input type="number" name="pet_weight_kg" placeholder="예: 4.5" step="0.1" min="0" defaultValue={pets[editPetIdx]?.weightKg ?? ''} />
+              </div>
+
+              <div className="qa-block">
+                <span className="qa-label">체구는 어느 정도인가요? (선택)</span>
+                <select name="pet_size" defaultValue={pets[editPetIdx]?.size ? String(pets[editPetIdx].size) : ''}>
+                  <option value="">선택 안 함</option>
+                  <option value="1">초소형</option>
+                  <option value="2">소형</option>
+                  <option value="3">중형</option>
+                  <option value="4">대형</option>
+                  <option value="5">초대형</option>
+                </select>
+              </div>
+
+              <div className="qa-block">
+                <span className="qa-label">평소 활동량은 어느 정도인가요? (선택)</span>
+                <select name="pet_activity_level" defaultValue={pets[editPetIdx]?.activityLevel ? String(pets[editPetIdx].activityLevel) : ''}>
+                  <option value="">선택 안 함</option>
+                  <option value="1">적음</option>
+                  <option value="2">보통</option>
+                  <option value="3">많음</option>
+                </select>
+              </div>
+
+              <div className="qa-block">
+                <span className="qa-label">먹는 걸 밝히거나 입이 까다로운 편인가요? (선택)</span>
+                <input type="text" name="diet_note" placeholder="예: 식탐이 많아요 / 입이 까다로워요" defaultValue={pets[editPetIdx]?.dietNote || ''} />
+              </div>
+
+              <div className="qa-block">
+                <span className="qa-label">피부 상태는 어떤가요? (선택)</span>
+                <input type="text" name="skin_note" placeholder="예: 피부가 예민한 편이에요" defaultValue={pets[editPetIdx]?.skinNote || ''} />
+              </div>
+
+              <div className="qa-block">
+                <span className="qa-label">알러지가 있나요? 있는 항목을 모두 체크해주세요 (선택)</span>
+                <div className="allergy-list">
+                  {allergenOptions.map((name) => (
+                    <label key={name}><input type="checkbox" name="pet_allergies" value={name} defaultChecked={pets[editPetIdx]?.allergies?.includes(name)} />{name}</label>
+                  ))}
+                </div>
+              </div>
+            </>}
+
+            <div className="modal-error">{editError}</div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setEditOpen(false)}>취소</button>
+              <button type="submit" className="btn btn-solid" disabled={editSubmitting}>
+                {editSubmitting ? <span className="spinner" /> : '저장'}
               </button>
             </div>
           </form>
