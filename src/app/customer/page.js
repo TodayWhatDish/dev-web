@@ -159,13 +159,14 @@ export default function CustomerPage() {
 
   // 마이페이지 진입점: 회원 정보 + 펫 상세 + 구매이력을 /me/profile 한 번으로 받는다
   // (customer_detail() 재사용 - app/api/routes/auth.py 참고).
-  async function loadMyProfile() {
+  // openReco: 추천 모달을 자동으로 열지. 로그인/최초 진입은 true, 정보 수정 후 새로고침은 false(모달이 튀지 않게).
+  async function loadMyProfile(openReco = true) {
     // 프로필 응답(~1.5초)을 기다리는 동안 예시 카드가 '추천 1'로 보이지 않게 바로 스켈레톤으로 바꾼다
     setCardsLoading(true);
     setLoadError('');
     // 추천(/me/recommend)은 프로필 응답에 의존하지 않는다(둘 다 토큰 기준) - 순차로 기다리면 ~3초라
     // 동시에 출발시켜 ~1.5초로 줄인다. cardsLoading은 loadMyRecommend가 끝낼 때 내린다.
-    loadMyRecommend();
+    loadMyRecommend(openReco);
     try {
       const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
       if (res.status === 401) { logout(); return; }
@@ -201,21 +202,24 @@ export default function CustomerPage() {
     } catch { setLoadError('내 구매목록을 불러오지 못했습니다.') }
   }
 
-  async function loadMyRecommend() {
+  async function loadMyRecommend(openModal = true) {
     setCardsLoading(true);
+    // 모달을 먼저 열어 스켈레톤을 보여준다 - 데이터가 다 온 뒤 완성된 채로 갑자기 튀어나오지 않게.
+    if (openModal) setRecoOpen(true);
     try {
       const res = await fetch(`${API}/me/recommend`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
       if (res.status === 401) { logout(); return; }
-      if (!res.ok) { setCards([]); setLoadError('추천을 불러오지 못했습니다.'); return; }
+      if (!res.ok) { setCards([]); setLoadError('추천을 불러오지 못했습니다.'); if (openModal) setRecoOpen(false); return; }
       const { found, query } = await res.json();
       const profileCards = (found || []).map(toCard);
       setCards(profileCards);
       setRecoBasis({ query });
       profileRecoRef.current = { cards: profileCards, query }; // 질문이 상품을 못 찾을 때 되돌릴 기준 추천
-      if (found?.length) setRecoOpen(true);
-    } catch { 
+      if (openModal && !found?.length) setRecoOpen(false); // 추천이 없으면 빈 모달은 닫는다
+    } catch {
       setCards([]);
       setLoadError('추천을 불러오지 못했습니다.');
+      if (openModal) setRecoOpen(false);
     } finally {
       setCardsLoading(false);
     }
@@ -414,7 +418,7 @@ export default function CustomerPage() {
       return;
     }
     setEditOpen(false);
-    loadMyProfile(); // 서버에 저장된 값으로 화면을 다시 채운다
+    loadMyProfile(false); // 서버에 저장된 값으로 화면을 다시 채운다 (추천 모달은 안 띄운다 - 수정 저장일 뿐이라)
   }
 
   // ---------------- 리뷰 남기기 ----------------
@@ -704,7 +708,7 @@ export default function CustomerPage() {
         ) : recoBasis?.question ? (
           <div className="reco-basis">
             <span>AI 답변에 쓰인 근거 상품이에요.</span>
-            <button type="button" className="btn btn-ghost" onClick={loadMyRecommend}>{pets[0]?.name ?? '우리 아이'} 맞춤 추천으로 돌아가기</button>
+            <button type="button" className="btn btn-ghost" onClick={() => loadMyRecommend(true)}>{pets[0]?.name ?? '우리 아이'} 맞춤 추천으로 돌아가기</button>
           </div>
         ) : basisChips(pets[0], recoBasis?.query).length > 0 && (
           <div className="reco-basis">
@@ -755,7 +759,8 @@ export default function CustomerPage() {
             )}
           </div>
           <ol className="reco-list">
-            {cards.slice(0, 3).map((c, i) => (
+            {cardsLoading && <>{[0, 1, 2].map((i) => <li className="reco-skeleton" key={`s${i}`} />)}</>}
+            {!cardsLoading && cards.slice(0, 3).map((c, i) => (
               <li className="reco-item" key={c.key}>
                 <span className="reco-rank">{i + 1}</span>
                 <div className="reco-thumb">
