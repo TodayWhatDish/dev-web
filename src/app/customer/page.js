@@ -114,7 +114,6 @@ export default function CustomerPage() {
   const [askAnswer, setAskAnswer] = useState('');
   const [askAnswerVisible, setAskAnswerVisible] = useState(false);
   const [askSources, setAskSources] = useState([]);
-  const [askVerif, setAskVerif] = useState(null); // 반증(팩트체크) 결과: { accuracy, note } 또는 { warn } - 없으면 null
 
   const [loadError, setLoadError] = useState('');
   const [buyError, setBuyError] = useState('');
@@ -145,7 +144,6 @@ export default function CustomerPage() {
     setAskAnswer('');
     setAskAnswerVisible(false);
     setAskSources([]);
-    setAskVerif(null);
     setLoadError('');
     setBuyError('');
   }
@@ -417,7 +415,6 @@ export default function CustomerPage() {
     setAskAnswerVisible(true);
     setAskAnswer('답변을 생각하고 있어요...');
     setAskSources([]);
-    setAskVerif(null);
     let answering = false; // 첫 delta가 오기 전까지는 위 안내 문구를 그대로 둔다
 
     try {
@@ -462,17 +459,10 @@ export default function CustomerPage() {
                 setRecoOpen(true);
               }
             }
-            else if (chunk.type === 'verification') {
-              // 답변 모델과 다른 모델이 매긴 팩트체크 결과. note 끝에 </note> 같은 꼬리표가 붙어오면 떼어낸다
-              const note = (chunk.note || '').replace(/(\s*<\/?[\w-]+>)+\s*$/g, '').trim();
-              setAskVerif({ accuracy: chunk.accuracy, note });
-            }
-            else if (chunk.type === 'error') {
-              // 반증 단계 오류는 답변을 만든 뒤에 온다 - 이미 답한 내용을 지우지 말고 경고만 따로 보여준다.
-              // 아직 답변을 못 받은 상태(answering=false)의 오류만 답변 자리에 그대로 띄운다.
-              if (answering) setAskVerif({ warn: chunk.message });
-              else setAskAnswer(chunk.message);
-            }
+            // 반증(verification)은 관리자 화면 전용 QA 신호라 고객에겐 보여주지 않는다 - 여기선 받고 버린다.
+            // 반증 단계 오류도 답변을 다 보여준 뒤에 오므로, 답변 전(answering=false) 오류만 띄우고
+            // 답변 후 오류는 무시해 이미 스트리밍된 정답을 지키게 둔다.
+            else if (chunk.type === 'error' && !answering) setAskAnswer(chunk.message);
           } catch { /* 깨진 줄 하나 때문에 전체를 멈추지 않는다 */ }
         }
       }
@@ -596,16 +586,6 @@ export default function CustomerPage() {
                     : '우리 아이 프로필 기준으로 답해드려요.'}
               </div>
               {askAnswerVisible && <div className="ai-answer">{askAnswer}</div>}
-              {askVerif && (
-                <div className="ai-verif">
-                  {askVerif.warn
-                    ? <span className="ai-verif-warn">⚠ {askVerif.warn}</span>
-                    : <>
-                        <span className="ai-verif-score">반증 신뢰도 {Math.round(askVerif.accuracy * 100)}%</span>
-                        {askVerif.note && <p className="ai-verif-note">{askVerif.note}</p>}
-                      </>}
-                </div>
-              )}
               <div className="ai-sources">
                 {askSources.slice(0, 3).map((s, i) => (
                   <div className="ai-source-item" key={i}>
