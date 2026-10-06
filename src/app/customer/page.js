@@ -114,6 +114,8 @@ export default function CustomerPage() {
 
   const [reviewIndex, setReviewIndex] = useState(null); // null = 안 열림, 숫자면 그 purchases[i]를 리뷰중
   const [reviewError, setReviewError] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [buyingKey, setBuyingKey] = useState(null); // 구매 진행 중인 카드 key - 더블클릭 이중 차감을 막고 '구매 중' 표시
 
   const [asking, setAsking] = useState(false);
   const [askAnswer, setAskAnswer] = useState('');
@@ -161,6 +163,9 @@ export default function CustomerPage() {
     // 프로필 응답(~1.5초)을 기다리는 동안 예시 카드가 '추천 1'로 보이지 않게 바로 스켈레톤으로 바꾼다
     setCardsLoading(true);
     setLoadError('');
+    // 추천(/me/recommend)은 프로필 응답에 의존하지 않는다(둘 다 토큰 기준) - 순차로 기다리면 ~3초라
+    // 동시에 출발시켜 ~1.5초로 줄인다. cardsLoading은 loadMyRecommend가 끝낼 때 내린다.
+    loadMyRecommend();
     try {
       const res = await fetch(`${API}/me/profile`, { headers: { Authorization: `Bearer ${userTokenRef.current}` } });
       if (res.status === 401) { logout(); return; }
@@ -181,7 +186,6 @@ export default function CustomerPage() {
         setLoadError('내 정보를 불러오지 못했습니다.')
       }
     } catch { setLoadError('내 정보를 불러오지 못했습니다.')}
-    loadMyRecommend();
   }
 
   async function loadMyPurchases() {
@@ -416,11 +420,13 @@ export default function CustomerPage() {
   // ---------------- 리뷰 남기기 ----------------
   async function handleReviewSubmit(e, i) {
     e.preventDefault();
+    if (reviewSubmitting) return;
     setReviewError('');
     const fd = new FormData(e.currentTarget);
     const body = String(fd.get('body') || '').trim();
     if (!body) return;
     const rating = Number(fd.get('rating'));
+    setReviewSubmitting(true);
     let res;
     try {
       res = await fetch(`${API}/me/purchases/${purchases[i].purchase_id}/review`, {
@@ -430,8 +436,10 @@ export default function CustomerPage() {
       });
     } catch {
       setReviewError('서버에 연결할 수 없습니다.');
+      setReviewSubmitting(false);
       return;
     }
+    setReviewSubmitting(false);
     if (res.status === 401) { logout(); return; }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -444,7 +452,7 @@ export default function CustomerPage() {
 
   // ---------------- 추천 카드: 구매하기 ----------------
   async function handleBuy(card) {
-    if (card.bought) return;
+    if (card.bought || buyingKey) return; // 이미 샀거나 구매 진행 중이면 무시 - 더블클릭 이중 차감 방지
     if (!isLoggedIn) {
       // 로그인 안 된 상태 - 목업으로 성공 처리하지 않고 로그인을 유도한다
       handleLoginClick();
@@ -452,6 +460,7 @@ export default function CustomerPage() {
     }
     if (!card.productId) return; // 추천이 아직 안 뜬 자리(실 productId 없음) - 살 게 없다
     setBuyError('');
+    setBuyingKey(card.key); // 버튼을 '구매 중…'으로 바꾸고 응답 올 때까지 다시 못 누르게
     // POST /me/purchases가 크레딧을 차감하고 purchase 행을 만든다. 잔액이 부족하면 409
     try {
       const res = await fetch(`${API}/me/purchases`, {
@@ -463,9 +472,10 @@ export default function CustomerPage() {
       if (!res.ok) { setBuyError(await errorDetail(res, '구매하지 못했습니다.')); return; }
       const { credit_krw } = await res.json();
       setProfile((p) => ({ ...p, credit: credit_krw }));
-    } catch { setBuyError('서버에 연결할 수 없습니다.'); return; }
-    loadMyPurchases();
-    setCards((prev) => prev.map((c) => (c.key === card.key ? { ...c, bought: true } : c)));
+      loadMyPurchases();
+      setCards((prev) => prev.map((c) => (c.key === card.key ? { ...c, bought: true } : c)));
+    } catch { setBuyError('서버에 연결할 수 없습니다.'); }
+    finally { setBuyingKey(null); }
   }
 
   // ---------------- AI 질문창: 로그인 필요 + 일일 횟수 ----------------
@@ -626,7 +636,7 @@ export default function CustomerPage() {
                   <option value="1">★</option>
                 </select>
                 <textarea name="body" placeholder={`${purchases[reviewIndex].name} 후기를 남겨주세요`}></textarea>
-                <button type="submit">등록</button>
+                <button type="submit" disabled={reviewSubmitting}>{reviewSubmitting ? <span className="spinner dark" /> : '등록'}</button>
                 <div className="modal-error">{reviewError}</div>
               </form>
             )}
@@ -725,8 +735,8 @@ export default function CustomerPage() {
                   <span className="price">{c.price.toLocaleString()}원</span>
                   <span className="badge-score">매칭 {Math.round(c.score * 100)}%</span>
                 </div>
-                <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought}>
-                  {c.bought ? '구매 완료 ✓' : '구매하기'}
+                <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought || buyingKey === c.key}>
+                  {c.bought ? '구매 완료 ✓' : buyingKey === c.key ? '구매 중…' : '구매하기'}
                 </button>
               </div>
             ))}
@@ -759,8 +769,8 @@ export default function CustomerPage() {
                     <span className="reco-match"><i style={{ width: `${Math.round(c.score * 100)}%` }} />매칭 {Math.round(c.score * 100)}%</span>
                   </div>
                 </div>
-                <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought}>
-                  {c.bought ? '구매 완료 ✓' : '구매하기'}
+                <button type="button" className={c.bought ? 'btn-buy bought' : 'btn-buy'} onClick={() => handleBuy(c)} disabled={c.bought || buyingKey === c.key}>
+                  {c.bought ? '구매 완료 ✓' : buyingKey === c.key ? '구매 중…' : '구매하기'}
                 </button>
               </li>
             ))}
